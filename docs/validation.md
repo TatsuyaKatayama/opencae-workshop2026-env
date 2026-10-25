@@ -37,3 +37,5 @@ OpenFOAM の RC2 表記を解消するか、採用版を明示した仕様判断
 ## amd64 Actions の初回失敗と修正
 
 実行 `40176820088` ではイメージビルド、直列・MPI 計算、Python 後処理まで成功しました。公式 OSMesa 配布物の `pvpython-real` が `libglapi.so.0` 不足で起動せず、終了コード127になりました。ランタイムに `libglapi-mesa` を明示追加し、コマンド失敗時に保存ログ末尾を Actions のコンソールへ表示するよう修正しました。修正版の描画・動画生成は Actions で再検証します。
+
+再実行 `40177659597` では libglapi の不足は解消しましたが、pvpython がセグメンテーションフォルトで停止しました。公式配布物は `lib/mesa` に libglapi と OSMesa を同梱しており、上流でも探索パスの問題が報告されています（https://discourse.paraview.org/t/trouble-running-paraview-5-13-3-on-hpc-cluster-missing-libgl-so-1-and-libglapi-so-0/16749/2）。システムの libglapi 追加を取り消し、amd64 launcher に `--mesa --backend llvmpipe` を渡して同梱ライブラリを選択する構成へ変更しました。ARM64 のソースビルドにはこの引数を渡しません。

@@ -72,7 +72,7 @@ FROM base AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl python3 python3-venv python-is-python3 \
     ffmpeg openmpi-bin libscotch-7.0 libptscotch-7.0 libfftw3-double3 \
-    libreadline8t64 libgmp10 libmpfr6 libgomp1 libosmesa6 libglapi-mesa libgl1-mesa-dri \
+    libreadline8t64 libgmp10 libmpfr6 libgomp1 libosmesa6 libgl1-mesa-dri \
     libfreetype6 fontconfig zlib1g && rm -rf /var/lib/apt/lists/*
 ARG OPENFOAM_DEB_VERSION
 ARG OPENFOAM_KEY_SHA256
@@ -92,13 +92,13 @@ RUN uv venv --python /usr/bin/python3 /opt/post-venv && \
 RUN apt-get update && apt-get install -y --no-install-recommends libnss-wrapper && rm -rf /var/lib/apt/lists/*
 COPY --from=paraview /opt/paraview /opt/paraview
 COPY containers/cfd-tools/scripts/entrypoint.sh /usr/local/bin/cfd-entrypoint
+COPY containers/cfd-tools/scripts/pv-command.sh /usr/local/bin/pv-command
 COPY examples/smoke /opt/workshop-smoke
 COPY versions.env /opt/workshop-manifest/versions.env
 # ParaView 配布物の MPI バイナリを PATH に入れず、可視化コマンドだけ公開する。
-RUN for tool in pvpython pvbatch; do \
-        printf '#!/bin/sh\nexec /opt/paraview/bin/%s "$@"\n' "$tool" > "/usr/local/bin/$tool"; \
-        chmod 755 "/usr/local/bin/$tool"; \
-    done && chmod 755 /usr/local/bin/cfd-entrypoint && \
+RUN chmod 755 /usr/local/bin/cfd-entrypoint /usr/local/bin/pv-command && \
+    ln -s pv-command /usr/local/bin/pvpython && \
+    ln -s pv-command /usr/local/bin/pvbatch && \
     dpkg-query -W -f='${Package}\t${Version}\t${Architecture}\n' > /opt/workshop-manifest/packages.tsv && \
     ffmpeg -buildconf > /opt/workshop-manifest/ffmpeg-buildconf.txt 2>&1 && \
     uv pip freeze --python /opt/post-venv/bin/python > /opt/workshop-manifest/python-packages.txt
