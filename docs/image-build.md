@@ -25,6 +25,8 @@ scripts/smoke-test.sh
 - uv：0.9.10 の CPU 別アーカイブと SHA256。
 - 後処理 Python：`requirements.in` と、推移依存を含むハッシュ付き `requirements.lock`。
 
+amd64 の `pvpython` / `pvbatch` は起動ラッパーで `--mesa --backend llvmpipe` を指定し、公式配布物の `lib/mesa` を使用します。ARM64 のソースビルドにはこの launcher 用引数を渡しません。
+
 OpenFOAM の `-default` パッケージは開発ヘッダーやコンパイラー等も依存関係として含みます。ParaView のビルド用ステージとは別に、OpenFOAM の公式パッケージ構成として導入します。
 
 ## 結果の確認
