@@ -79,3 +79,9 @@ OpenFOAM の RC2 表記を解消するか、採用版を明示した仕様判断
 通常の初期設定後、Crew doctor の標準 MCP プローブは通過しました。音声認識の追加依存とホスト側 ffmpeg は今回の導入対象に含めていません。Kiro CLI の認証未完了時に出た ACP 起動失敗は、ログに明示された `You are not logged in` が直接の原因です。
 
 利用者が別の WSL ターミナルで Kiro CLI の認証を完了し、Crew の会話からホスト・Docker・コンテナのバージョン確認を実行しました。続いて `scripts/smoke-test.sh` の成功と動画の再生を報告しました。これはローカル ARM64 での手動接続検証であり、Windows 新規セットアップの検証とは区別します。
+
+## Ubuntu 24.04 セットアップの ARM64／amd64 対応
+
+2026-10-26、共通 Bash によるバイナリ導入、認証、Crew 起動・停止を実装しました。ローカルの制御テスト22件（既存4件を含む）、Bash 構文、Compose 設定検査が通過しました。CPU 別 URL・ハッシュ・Codex の展開名、amd64 の計画表示と Crew 再利用もモックで確認しています。実際のソフト導入や CFD ビルドはこの開発用 WSL では実行していません。
+
+ARM64 の初回セットアップ CI は [40206466748](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/40206466748) で実行中です。amd64 のネイティブ新規導入 CI を追加し、両 CPU の全工程の合否は CI 完了後に記録します。Kiro CLI 2.34.0、Crew 0.9.0、OpenCode 1.19.4、Codex CLI 0.164.0 と Docker 関連パッケージの採用版は共通です。認証・ブラウザー・WSL 新規作成・Proxy 経由通信は今回の CI の合格対象に含めません。

@@ -101,15 +101,15 @@ as_user() {
 }
 
 install_binary() {
-    local tool="$1" version="$2" prefix="$3" url_var sha_var archive dest binary
+    local tool="$1" version="$2" prefix="$3" archive dest binary
     if has_version "$tool" "$version"; then return; fi
     command -v "$tool" >/dev/null && die "$tool の別バージョンが存在します。専用の新規環境を使用してください。"
-    url_var="${prefix}_${ARCH_KEY}_URL"; sha_var="${prefix}_${ARCH_KEY}_SHA256"
+    select_artifact "$prefix"
     archive="$STATE/downloads/$tool-$version-$ARCH.tar.gz"
-    download "${!url_var}" "${!sha_var}" "$archive"
+    download "$ARTIFACT_URL" "$ARTIFACT_SHA256" "$archive"
     dest="$(mktemp -d "$STATE/downloads/extract-XXXXXX")"
     tar -xzf "$archive" -C "$dest" --no-same-owner
-    if [[ "$tool" == codex ]]; then binary="$dest/codex-$( [[ "$ARCH" == arm64 ]] && echo aarch64 || echo x86_64 )-unknown-linux-musl"; else binary="$dest/$tool"; fi
+    binary="$dest/$(archive_binary "$tool")"
     install -m 0755 "$binary" "$HOME/.local/bin/$tool"
     has_version "$tool" "$version" || die "$tool の版を確認できません。"
 }
@@ -118,8 +118,9 @@ install_agents() {
     mkdir -p "$HOME/.local/bin"
     if ! has_version kiro-cli "$KIRO_CLI_VERSION"; then
         command -v kiro-cli >/dev/null && die 'Kiro CLI の別バージョンが存在します。'
-        local url_var="KIRO_CLI_${ARCH_KEY}_URL" sha_var="KIRO_CLI_${ARCH_KEY}_SHA256" dir
-        download "${!url_var}" "${!sha_var}" "$STATE/downloads/kiro-$KIRO_CLI_VERSION-$ARCH.zip"
+        local dir
+        select_artifact KIRO_CLI
+        download "$ARTIFACT_URL" "$ARTIFACT_SHA256" "$STATE/downloads/kiro-$KIRO_CLI_VERSION-$ARCH.zip"
         dir="$(mktemp -d "$STATE/downloads/kiro-XXXXXX")"
         unzip -q "$STATE/downloads/kiro-$KIRO_CLI_VERSION-$ARCH.zip" -d "$dir"
         env -u Q_INSTALL_GLOBAL KIRO_CLI_SKIP_SETUP=1 bash "$dir/kirocli/install.sh"

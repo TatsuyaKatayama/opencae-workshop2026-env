@@ -10,12 +10,28 @@ platform() {
     source /etc/os-release
     [[ "$ID:$VERSION_ID" == ubuntu:24.04 ]] || die 'Ubuntu 24.04 が必要です。'
     case "$(uname -m)" in
-        aarch64|arm64) ARCH=arm64; ARCH_KEY=ARM64 ;;
-        x86_64|amd64) ARCH=amd64; ARCH_KEY=AMD64 ;;
+        aarch64|arm64) ARCH=arm64; ARCH_KEY=ARM64; LINUX_CPU=aarch64 ;;
+        x86_64|amd64) ARCH=amd64; ARCH_KEY=AMD64; LINUX_CPU=x86_64 ;;
         *) die '対応 CPU は ARM64 / amd64 です。' ;;
     esac
     (( EUID != 0 )) || die 'sudo 権限を持つ通常ユーザーで実行してください。'
     [[ "$SETUP_ROOT" != /mnt/* ]] || die 'プロジェクトを Linux ファイルシステムへ配置してください。'
+}
+
+select_artifact() {
+    local prefix="$1" url_var sha_var
+    case "$prefix" in KIRO_CLI|OPENCODE|CODEX) ;; *) die '未対応の配布物です。' ;; esac
+    url_var="${prefix}_${ARCH_KEY}_URL"; sha_var="${prefix}_${ARCH_KEY}_SHA256"
+    ARTIFACT_URL="${!url_var}"; ARTIFACT_SHA256="${!sha_var}"
+    [[ "$ARTIFACT_URL" == https://* && "$ARTIFACT_SHA256" =~ ^[0-9a-f]{64}$ ]] || die '配布設定が不正です。'
+}
+
+archive_binary() {
+    case "$1" in
+        codex) printf 'codex-%s-unknown-linux-musl\n' "$LINUX_CPU" ;;
+        opencode) printf 'opencode\n' ;;
+        *) die '未対応のバイナリです。' ;;
+    esac
 }
 
 init_state() {

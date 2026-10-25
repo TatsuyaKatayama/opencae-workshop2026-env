@@ -42,4 +42,4 @@ scripts/run-tool.sh pvpython --version
 
 ## Ubuntu 24.04 セットアップの実装
 
-Bash の導入・認証・Crew 起動／停止は [setup/ubuntu2404](setup/ubuntu2404/README.md) にあります。新規導入と CFD ビルドの統合テストは ARM64 CI で実施します。Windows の WSL 新規作成・ショートカット用 PowerShell は後続です。
+Bash の導入・認証・Crew 起動／停止は [setup/ubuntu2404](setup/ubuntu2404/README.md) にあります。新規導入と CFD ビルドの統合テストは ARM64／amd64 のネイティブ CI で実施します。Windows の WSL 新規作成・ショートカット用 PowerShell は後続です。

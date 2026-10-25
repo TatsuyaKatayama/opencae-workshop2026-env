@@ -61,6 +61,6 @@ python3 -m unittest discover -s tests -v
 
 ローカルでは外部コマンドをモック化し、設定検証、失敗伝播、対象サービスの分離、URL の出力制御を確認します。実際のソフト導入や CFD ビルドは実行しません。
 
-`Ubuntu 24.04 setup integration` は使い捨て ARM64 ランナーから既存 Docker パッケージを除去し、セットアップ全工程を実行する CI です。WSL 検証ではありません。認証とブラウザー操作も含みません。amd64 は同版配布の存在を確認済みですが、新しいセットアップ全体の実行は ARM64 を先行します。
+`Ubuntu 24.04 setup integration` は使い捨てネイティブ Ubuntu ランナーから既存 Docker パッケージを除去し、セットアップ全工程を実行する CI です。手動起動の `architecture` は `amd64`／`arm64`／`both` を選べます。現在の作業ブランチへの対象ファイル push は amd64 を実行し、先行中の ARM64 実行とは別グループで管理します。WSL 検証ではありません。認証とブラウザー操作も含みません。両 CPU の URL・SHA256・展開ファイル名は制御テストで確認し、実インストールと CFD の成否は CI の結果で判断します。
 
 導入情報の出典： [Docker apt](https://download.docker.com/linux/ubuntu/dists/noble/stable/)、[Kiro CLI manifest](https://prod.download.cli.kiro.dev/stable/latest/manifest.json)、[Crew](https://kiro.dev/docs/crew/installation/)、[OpenCode v1.19.4](https://github.com/anomalyco/opencode/releases/tag/v1.19.4)、[Codex 0.164.0](https://github.com/openai/codex/releases/tag/rust-v0.164.0)、[Codex CLI 公式資料](https://learn.chatgpt.com/docs/codex/cli)。
