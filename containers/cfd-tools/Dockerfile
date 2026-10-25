@@ -72,7 +72,7 @@ FROM base AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl python3 python3-venv python-is-python3 \
     ffmpeg openmpi-bin libscotch-7.0 libptscotch-7.0 libfftw3-double3 \
-    libreadline8t64 libgmp10 libmpfr6 libgomp1 libosmesa6 libgl1-mesa-dri \
+    libreadline8t64 libgmp10 libmpfr6 libgomp1 libosmesa6 libglapi-mesa libgl1-mesa-dri \
     libfreetype6 fontconfig zlib1g && rm -rf /var/lib/apt/lists/*
 ARG OPENFOAM_DEB_VERSION
 ARG OPENFOAM_KEY_SHA256
