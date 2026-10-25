@@ -8,7 +8,7 @@ result="$(mktemp -d "$REPO_ROOT/work/build-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")"
 cp "$REPO_ROOT/versions.env" "$result/versions.env"
 cp "$REPO_ROOT/containers/cfd-tools/requirements.lock" "$result/requirements.lock"
 git -C "$REPO_ROOT" rev-parse --verify HEAD > "$result/git-revision.txt" 2>/dev/null || echo uncommitted > "$result/git-revision.txt"
-git -C "$REPO_ROOT" status --porcelain > "$result/git-status.txt"
+git -C "$REPO_ROOT" status --porcelain > "$result/git-status.txt" 2>/dev/null || echo unavailable-zip > "$result/git-status.txt"
 docker version > "$result/docker-version.txt"
 start=$SECONDS
 status=0

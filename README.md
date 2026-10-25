@@ -39,3 +39,7 @@ scripts/run-tool.sh pvpython --version
 - [第三者ソフトと取得元](THIRD_PARTY_NOTICES.md)
 
 独自のコード・設定・文書は Apache-2.0 です。コンテナに含まれる第三者ソフトはそれぞれのライセンスに従います。
+
+## Ubuntu 24.04 セットアップの実装
+
+Bash の導入・認証・Crew 起動／停止は [setup/ubuntu2404](setup/ubuntu2404/README.md) にあります。新規導入と CFD ビルドの統合テストは ARM64 CI で実施します。Windows の WSL 新規作成・ショートカット用 PowerShell は後続です。

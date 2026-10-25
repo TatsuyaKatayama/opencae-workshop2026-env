@@ -1,0 +1,70 @@
+name: Ubuntu 24.04 setup integration
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/ubuntu2404-setup]
+    paths:
+      - setup/**
+      - tests/**
+      - scripts/**
+      - .github/workflows/ubuntu-setup.yml
+permissions:
+  contents: read
+concurrency:
+  group: ubuntu-setup-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source and control tests
+        run: scripts/check-source.sh
+      - name: Prepare disposable runner for fresh Docker installation
+        shell: bash
+        run: |
+          sudo systemctl stop docker.service docker.socket containerd.service
+          packages=()
+          for package in docker-ce docker-ce-cli docker-ce-rootless-extras docker-buildx-plugin docker-compose-plugin containerd.io docker.io containerd runc; do
+            if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed'; then
+              packages+=("$package")
+            fi
+          done
+          if (( ${#packages[@]} )); then sudo apt-get purge -y "${packages[@]}"; fi
+          sudo python3 - <<'PY'
+          from pathlib import Path
+          for p in Path('/etc/apt/sources.list.d').iterdir():
+              if p.is_file() and 'download.docker.com' in p.read_text():
+                  p.unlink()
+          PY
+          # CI 専用 VM の未使用 SDK を除去し、ParaView のビルド領域を確保する。
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h /
+      - name: Install tools, build and validate CFD image
+        run: bash setup/ubuntu2404/setup.sh
+        env:
+          BUILD_JOBS: '2'
+      - name: Verify no personal authentication and stopped Crew
+        shell: bash
+        run: |
+          set +e
+          bash setup/ubuntu2404/kiro-login.sh --status
+          status=$?
+          set -e
+          test "$status" = 3
+          bash setup/ubuntu2404/crew-stop.sh
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          d = Path.home() / '.local/state/opencae-workshop2026'
+          assert all((d/'steps'/s).exists() for s in ['prerequisites','docker','agents','crew-config','cfd-build','cfd-check'])
+          assert not (d/'failed-step').exists()
+          assert (d/'crew.json').stat().st_uid == os.getuid()
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ubuntu2404-setup-arm64
+          path: work/
+          retention-days: 7
