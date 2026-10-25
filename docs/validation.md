@@ -16,7 +16,7 @@
 | 任意 UID の起動 | UID/GID 1001 で OpenFOAM v2606、Python パッケージ、MPI 実行パス /usr/bin/mpirun を確認 |
 | 描画・動画・永続化の一括検証 | Linux amd64 の Actions とローカル WSL2 / ARM64 で成功 |
 | Windows 新規構築 | ARM64 / x64 とも未検証 |
-| Crew / Kiro CLI / OpenCode | 未導入・未接続検証 |
+| Crew / Kiro CLI / OpenCode | この WSL に CLI 2.34.0 / Crew 0.9.0 を導入し管理画面を起動。利用者が認証し、Crew 経由の計算・描画・動画生成まで成功を報告。OpenCode は既存導入あり、Crew 接続は未検証 |
 | Apple Silicon Mac | 後続工程 |
 
 ## GitHub Actions
@@ -70,4 +70,12 @@ OpenFOAM の RC2 表記を解消するか、採用版を明示した仕様判断
 - 描画は vtkOSOpenGLRenderWindow、Mesa 25.1.7 / llvmpipe（LLVM 20.1.2、128 bits）。X サーバーと GPU を使用しない。
 - 別の一時コンテナからデータ保持を確認し、ホストユーザーの所有権検査も成功。
 
-ローカルの構築記録は `work/build-20261025T101155Z-AfmOga/`、検証結果は `work/smoke-20261025T101332Z-2JXxdA/` に保存しました。これらは Git 管理対象外です。16GB ホストでの検証、Windows 新規構築、Kiro / Crew からの接続は引き続き別工程です。
+ローカルの構築記録は `work/build-20261025T101155Z-AfmOga/`、検証結果は `work/smoke-20261025T101332Z-2JXxdA/` に保存しました。これらは Git 管理対象外です。16GB ホストでの検証、Windows 新規構築は引き続き別工程です。
+
+## WSL のエージェント導入
+
+この WSL / ARM64 に Kiro CLI 2.34.0 と Crew 0.9.0 を公式配布から導入しました。CLI の ACP コマンド、Crew の標準エージェント設定、localhost:5476 の HTTP 200 を確認しています。amd64 の CLI 配布と Crew の wheel 依存解決も確認しましたが、amd64 ホストでの実起動は未検証です。認証・管理画面・起動方法は `docs/agents.md` に記載しています。
+
+通常の初期設定後、Crew doctor の標準 MCP プローブは通過しました。音声認識の追加依存とホスト側 ffmpeg は今回の導入対象に含めていません。Kiro CLI の認証未完了時に出た ACP 起動失敗は、ログに明示された `You are not logged in` が直接の原因です。
+
+利用者が別の WSL ターミナルで Kiro CLI の認証を完了し、Crew の会話からホスト・Docker・コンテナのバージョン確認を実行しました。続いて `scripts/smoke-test.sh` の成功と動画の再生を報告しました。これはローカル ARM64 での手動接続検証であり、Windows 新規セットアップの検証とは区別します。
