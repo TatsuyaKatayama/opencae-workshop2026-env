@@ -1,0 +1,36 @@
+name: Native image smoke tests
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, codex/cfd-tools-bootstrap]
+    paths:
+      - containers/**
+      - compose/**
+      - scripts/**
+      - examples/**
+      - versions.env
+      - .github/workflows/image.yml
+permissions:
+  contents: read
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build native image
+        run: scripts/build-image.sh
+        env:
+          BUILD_JOBS: '2'
+      - name: Run calculation, rendering and video checks
+        run: scripts/smoke-test.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-${{ matrix.runner }}
+          path: work/
+          retention-days: 7

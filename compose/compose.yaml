@@ -1,0 +1,38 @@
+name: opencae-workshop2026-env
+services:
+  cfd-tools:
+    image: ${CFD_IMAGE:?versions.env を指定してください}
+    platform: ${CFD_PLATFORM:?scripts 配下の入口を使用してください}
+    build:
+      context: .
+      dockerfile: containers/cfd-tools/Dockerfile
+      args:
+        UBUNTU_IMAGE: ${UBUNTU_IMAGE}
+        APT_SNAPSHOT: ${APT_SNAPSHOT}
+        OPENFOAM_DEB_VERSION: ${OPENFOAM_DEB_VERSION}
+        OPENFOAM_KEY_SHA256: ${OPENFOAM_KEY_SHA256}
+        PARAVIEW_URL: ${PARAVIEW_URL}
+        PARAVIEW_SHA256: ${PARAVIEW_SHA256:?ParaView のチェックサムが必要です}
+        PARAVIEW_AMD64_URL: ${PARAVIEW_AMD64_URL}
+        PARAVIEW_AMD64_SHA256: ${PARAVIEW_AMD64_SHA256:?amd64 配布物のチェックサムが必要です}
+        UV_VERSION: ${UV_VERSION}
+        UV_ARM64_SHA256: ${UV_ARM64_SHA256}
+        UV_AMD64_SHA256: ${UV_AMD64_SHA256}
+        BUILD_JOBS: ${BUILD_JOBS:-2}
+    user: ${HOST_UID:?}:${HOST_GID:?}
+    init: true
+    working_dir: /work
+    environment:
+      HOME: /tmp/opencae-home
+      MPLBACKEND: Agg
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      GALLIUM_DRIVER: llvmpipe
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    volumes:
+      - type: bind
+        source: ./work
+        target: /work
+        bind:
+          create_host_path: false
+    command: [sleep, infinity]

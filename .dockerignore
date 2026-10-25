@@ -1,0 +1,13 @@
+.git
+.agents
+.codex
+.aws
+work
+.venv
+.cache
+**/__pycache__
+*.tar
+*.tar.gz
+*.tgz
+*.tar.xz
+*.deb

@@ -1,0 +1,10 @@
+# Python 3.12 / linux arm64・amd64 共通。変更時は requirements.lock を再生成する。
+foamlib==1.9.0
+numpy==2.2.6
+scipy==1.15.3
+matplotlib==3.10.3
+japanize-matplotlib==1.1.3
+optuna==4.3.0
+pandas==2.2.3
+# japanize-matplotlib が利用する distutils を Python 3.12 に提供する。
+setuptools==80.9.0

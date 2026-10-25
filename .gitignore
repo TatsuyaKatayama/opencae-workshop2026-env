@@ -1,0 +1,19 @@
+/work/
+/.env
+/.env.*
+!/.env.example
+/.venv/
+/.cache/
+__pycache__/
+*.py[cod]
+*.tar
+*.tar.gz
+*.tgz
+*.tar.xz
+*.deb
+.DS_Store
+
+# ホストのエージェント設定・資格情報は配布しない。
+/.agents/
+/.codex/
+/.aws/
