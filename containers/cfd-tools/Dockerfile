@@ -89,7 +89,7 @@ COPY containers/cfd-tools/requirements.lock /opt/workshop-manifest/requirements.
 RUN uv venv --python /usr/bin/python3 /opt/post-venv && \
     uv pip install --python /opt/post-venv/bin/python --require-hashes \
         -r /opt/workshop-manifest/requirements.lock && uv cache clean
-RUN apt-get update && apt-get install -y --no-install-recommends libnss-wrapper && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends libnss-wrapper libpython3.12t64 && rm -rf /var/lib/apt/lists/*
 COPY --from=paraview /opt/paraview /opt/paraview
 COPY containers/cfd-tools/scripts/entrypoint.sh /usr/local/bin/cfd-entrypoint
 COPY containers/cfd-tools/scripts/pv-command.sh /usr/local/bin/pv-command
@@ -104,6 +104,8 @@ RUN chmod 755 /usr/local/bin/cfd-entrypoint /usr/local/bin/pv-command && \
     uv pip freeze --python /opt/post-venv/bin/python > /opt/workshop-manifest/python-packages.txt
 ENV PATH="/opt/post-venv/bin:$PATH" \
     HOME=/tmp/opencae-home MPLBACKEND=Agg LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+# ビルドステージにだけ存在する共有ライブラリへの依存を見逃さない。
+RUN /usr/local/bin/pvpython --version
 WORKDIR /work
 ENTRYPOINT ["/usr/local/bin/cfd-entrypoint"]
 CMD ["bash"]
