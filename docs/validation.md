@@ -84,4 +84,4 @@ OpenFOAM の RC2 表記を解消するか、採用版を明示した仕様判断
 
 2026-10-26、共通 Bash によるバイナリ導入、認証、Crew 起動・停止を実装しました。ローカルの制御テスト22件（既存4件を含む）、Bash 構文、Compose 設定検査が通過しました。CPU 別 URL・ハッシュ・Codex の展開名、amd64 の計画表示と Crew 再利用もモックで確認しています。実際のソフト導入や CFD ビルドはこの開発用 WSL では実行していません。
 
-ARM64 の初回セットアップ CI は [40206466748](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/40206466748) で実行中です。amd64 のネイティブ新規導入 CI を追加し、両 CPU の全工程の合否は CI 完了後に記録します。Kiro CLI 2.34.0、Crew 0.9.0、OpenCode 1.19.4、Codex CLI 0.164.0 と Docker 関連パッケージの採用版は共通です。認証・ブラウザー・WSL 新規作成・Proxy 経由通信は今回の CI の合格対象に含めません。
+2026-10-27、ARM64 [40206466748](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/40206466748) と amd64 [40206879065](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/40206879065) がともに成功したことを確認しました。Docker 新規導入、各 CLI・Crew 導入、CFD ビルド・計算・描画・動画生成、未認証状態と Crew 停止の確認まで通過しています。Kiro CLI 2.34.0、Crew 0.9.0、OpenCode 1.19.4、Codex CLI 0.164.0 と Docker 関連パッケージの採用版は共通です。認証・ブラウザー・WSL 新規作成・Proxy 経由通信は今回の CI の合格対象に含めません。
