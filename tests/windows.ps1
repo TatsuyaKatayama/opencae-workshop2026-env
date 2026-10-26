@@ -78,6 +78,7 @@ try {
     Must-Fail { Read-Environment $path }
 } finally { Remove-Item -LiteralPath $temp -Recurse -Force }
 if ($env:OS -eq 'Windows_NT') {
+    if ($env:TEST_EXPECTED_ARCH) { Check ((Get-WindowsCpu) -eq $env:TEST_EXPECTED_ARCH) 'Wrong native Windows CPU' }
     . (Join-Path $RepositoryRoot 'setup/windows/Setup.ps1')
     $temp = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
     $previousLocalAppData=$env:LOCALAPPDATA

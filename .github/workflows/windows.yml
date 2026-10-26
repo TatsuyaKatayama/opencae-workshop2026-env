@@ -10,6 +10,8 @@ jobs:
         runner: [windows-2025, windows-11-arm]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
+    env:
+      TEST_EXPECTED_ARCH: ${{ matrix.runner == 'windows-11-arm' && 'arm64' || 'amd64' }}
     steps:
       - uses: actions/checkout@v4
       - name: Windows PowerShell 5.1 control tests

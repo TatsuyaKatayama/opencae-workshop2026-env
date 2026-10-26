@@ -21,6 +21,10 @@ function Invoke-Wsl {
     $info.UseShellExecute = $false
     $info.RedirectStandardOutput = [bool]$Capture
     $info.RedirectStandardError = [bool]$Capture
+    if ($Capture) {
+        $info.StandardOutputEncoding = New-Object Text.UTF8Encoding($false)
+        $info.StandardErrorEncoding = New-Object Text.UTF8Encoding($false)
+    }
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $info
     try {
@@ -144,6 +148,13 @@ function New-CrewShortcuts {
     }
 }
 
+function Get-WindowsCpu {
+    # Machine registry reports ARM64 even when PowerShell runs under x64 emulation.
+    $nativeArch = [Microsoft.Win32.Registry]::GetValue('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment', 'PROCESSOR_ARCHITECTURE', $null)
+    if (!$nativeArch) { $nativeArch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE } }
+    switch ($nativeArch) { 'ARM64' { return 'arm64' }; 'AMD64' { return 'amd64' }; default { throw 'Unsupported Windows CPU.' } }
+}
+
 function Get-SetupArchitecture {
     if ($env:OS -ne 'Windows_NT') { throw 'Run Setup.ps1 on Windows 11.' }
     if (![Environment]::Is64BitProcess) { throw 'Use 64-bit PowerShell.' }
@@ -151,6 +162,5 @@ function Get-SetupArchitecture {
     if (!(Get-Command wsl.exe -ErrorAction SilentlyContinue)) { throw 'Install WSL first: wsl --install --no-distribution. Restart Windows, then retry.' }
     $result = Invoke-Wsl -Capture -Arguments @('--status')
     if ($result.Code -ne 0) { throw 'WSL is not ready. Run wsl --install --no-distribution, restart Windows, then retry.' }
-    $nativeArch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
-    switch ($nativeArch) { 'ARM64' { return 'arm64' }; 'AMD64' { return 'amd64' }; default { throw 'Unsupported Windows CPU.' } }
+    return Get-WindowsCpu
 }
