@@ -98,8 +98,8 @@ param(
     Assert-WslResult $result 'Project path conversion'
     $linuxSource = $result.Output.Trim()
     if ($config.phase -eq 'Importing') {
-        $args = @('-d',$DistroName,'-u','root','--exec','env') + $proxyEnvironment + @('bash',"$linuxSource/setup/ubuntu2404/bootstrap-wsl.sh",$UserName,$config.environmentId)
-        Assert-WslResult (Invoke-Wsl -Arguments $args) 'Linux user initialization'
+        $bootstrapArguments = @('-d',$DistroName,'-u','root','--exec','env') + $proxyEnvironment + @('bash',"$linuxSource/setup/ubuntu2404/bootstrap-wsl.sh",$UserName,$config.environmentId)
+        Assert-WslResult (Invoke-Wsl -Arguments $bootstrapArguments) 'Linux user initialization'
         Assert-WslResult (Invoke-Wsl -Arguments @('--terminate',$DistroName)) 'WSL restart'
         $config.phase='Initialized'; Save-Environment $configPath $config
     }
@@ -135,9 +135,8 @@ if ($MyInvocation.InvocationName -ne '.') {
     try {
         Invoke-WorkshopSetup @PSBoundParameters
     } catch {
-    Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host 'Setup stopped. Correct the error and rerun with the same options. Existing environments are not deleted.'
-    exit 1
-}
-
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        Write-Host 'Setup stopped. Correct the error and rerun with the same options. Existing environments are not deleted.'
+        exit 1
+    }
 }

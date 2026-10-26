@@ -10,7 +10,7 @@ Windows では **WSL2 Ubuntu 24.04 内の Docker Engine / CLI・Compose・Buildx
 
 `openfoam2606` の取得時の apt 版は **2606.0~rc2-1** です。正式版ソースの v2606 と同一内容であるとは扱いません。講習用の正式リリース判定は [検証記録](docs/validation.md) を参照してください。
 
-Linux amd64 のネイティブ CI と、ローカル WSL2 / ARM64 の両方で、計算・CPU 描画・動画生成・データ保持まで通過しました。ARM64 の修正版 CI は再検証中です。Windows の新規導入と認証・起動・終了スクリプトを実装しました。Windows 実機での受け入れと macOS 対応は後続です。Crew → Kiro CLI → 計算コンテナの実行と動画生成は利用者による操作で確認済みです。この WSL の Kiro CLI / Crew は導入済みで、認証と操作は [エージェントの手順](docs/agents.md) を参照してください。
+Linux amd64 のネイティブ CI と、ローカル WSL2 / ARM64 の両方で、計算・CPU 描画・動画生成・データ保持まで通過しました。Ubuntu セットアップの ARM64／amd64 CI も成功しました。Windows の新規導入と認証・起動・終了スクリプトを実装しました。Windows 実機での受け入れと macOS 対応は後続です。Crew → Kiro CLI → 計算コンテナの実行と動画生成は利用者による操作で確認済みです。この WSL の Kiro CLI / Crew は導入済みで、認証と操作は [エージェントの手順](docs/agents.md) を参照してください。
 
 ## はじめる
 
