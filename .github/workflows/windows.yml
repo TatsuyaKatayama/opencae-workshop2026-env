@@ -1,0 +1,18 @@
+name: Windows launcher checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  controls:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2025, windows-11-arm]
+        shell: [powershell, pwsh]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse scripts and test launch control
+        shell: ${{ matrix.shell }}
+        run: ./tests/windows.ps1
