@@ -8,11 +8,13 @@ jobs:
       fail-fast: false
       matrix:
         runner: [windows-2025, windows-11-arm]
-        shell: [powershell, pwsh]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Parse scripts and test launch control
-        shell: ${{ matrix.shell }}
+      - name: Windows PowerShell 5.1 control tests
+        shell: powershell
+        run: ./tests/windows.ps1
+      - name: PowerShell 7 control tests
+        shell: pwsh
         run: ./tests/windows.ps1
