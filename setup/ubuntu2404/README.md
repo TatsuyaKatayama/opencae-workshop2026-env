@@ -1,6 +1,6 @@
 # Ubuntu 24.04 セットアップ
 
-Windows 用 PowerShell の実装に先行する Bash コアです。Ubuntu 24.04、systemd、sudo 権限を持つ通常ユーザー、Linux ファイルシステム上のプロジェクトを前提にします。ユーザー作成と WSL 初期化は将来の `Setup.ps1` が担当します。
+Windows 用 PowerShell と Ubuntu 単体で共通利用する Bash コアです。Ubuntu 24.04、systemd、sudo 権限を持つ通常ユーザー、Linux ファイルシステム上のプロジェクトを前提にします。ユーザー作成と WSL 初期化は`Setup.ps1` が担当します。
 
 ## 実行
 
@@ -28,7 +28,7 @@ Crew の既定ポートは 5476。初回セットアップ時に `--port 5477` �
 
 ## 認証と Crew
 
-`kiro-login.sh --status` は認証済みなら 0、未認証なら 3 を返します。通常実行は対話端末でデバイス認証を開始します。URL とコードは端末に表示し、ブラウザーでの認証は利用者が行います。Windows ブラウザーを開く PowerShell 側の処理は後続です。
+`kiro-login.sh --status` は認証済みなら 0、未認証なら 3 を返します。通常実行は対話端末でデバイス認証を開始します。URL とコードは端末に表示し、ブラウザーでの認証は利用者が行います。Windows の認証ショートカットは `--open-browser` で対話端末を維持し、認証 URL を Windows の既定ブラウザーで開きます。
 
 Crew はプロジェクト絶対パスから生成した専用名のユーザー systemd 一時サービスとして起動します。端末終了後も動きますが、WSL／OS 起動時の自動起動はしません。`crew-start.sh` は認証と Docker を確認し、起動済みなら再利用します。`--status` は正常起動なら 0、未起動なら 3。通常実行の stdout はアクセス URL のみで、状態・案内は stderr です。URL を共有ログへ保存しないでください。
 

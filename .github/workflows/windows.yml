@@ -1,0 +1,22 @@
+name: Windows launcher checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  controls:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2025, windows-11-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      TEST_EXPECTED_ARCH: ${{ matrix.runner == 'windows-11-arm' && 'arm64' || 'amd64' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Windows PowerShell 5.1 control tests
+        shell: powershell
+        run: ./tests/windows.ps1
+      - name: PowerShell 7 control tests
+        shell: pwsh
+        run: ./tests/windows.ps1

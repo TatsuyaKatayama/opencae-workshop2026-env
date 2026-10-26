@@ -10,7 +10,7 @@
 | 実行入口 | 引数・終了コード保持、別ディレクトリからの呼び出し、Desktop / remote 拒否の単体テストを実施 |
 | apt 版 ParaView | 5.11.2+dfsg-6build5 + libosmesa6 を ARM64 一時コンテナへ導入。DISPLAY 不在で sphere を Render / SaveScreenshot すると vtkXOpenGLRenderWindow → XSync で SIGSEGV。採用せず |
 | OpenFOAM | 公式 apt の openfoam2606-default 2606.0~rc2-1 を導入し、実行時の v2606 表示を確認。正式版ソースとの同一性は未確認 |
-| ARM64 OSMesa ParaView | ローカル WSL2 / ARM64 で 5.13.3 のビルド・CPU 描画・動画生成・永続化まで成功。修正版 CI は再検証中 |
+| ARM64 OSMesa ParaView | ローカル WSL2 / ARM64 で 5.13.3 のビルド・CPU 描画・動画生成・永続化まで成功。Ubuntu セットアップ CI でも検証成功 |
 | amd64 OSMesa ParaView | 同版の公式バイナリで成功。Linux amd64 のネイティブ Actions で計算・描画・動画・永続化まで通過（下記） |
 | 直列・MPI・Python 後処理 | ネットワークなしの一時コンテナで通過。400セル、最終時刻0.02、速度差 L2=1.03e-9、圧力差 L2=9.73e-10。指定7パッケージの import、foamlib 読み込み、CSV・日本語グラフ保存、Optuna の小規模計算を確認 |
 | 任意 UID の起動 | UID/GID 1001 で OpenFOAM v2606、Python パッケージ、MPI 実行パス /usr/bin/mpirun を確認 |
@@ -85,3 +85,11 @@ OpenFOAM の RC2 表記を解消するか、採用版を明示した仕様判断
 2026-10-26、共通 Bash によるバイナリ導入、認証、Crew 起動・停止を実装しました。ローカルの制御テスト22件（既存4件を含む）、Bash 構文、Compose 設定検査が通過しました。CPU 別 URL・ハッシュ・Codex の展開名、amd64 の計画表示と Crew 再利用もモックで確認しています。実際のソフト導入や CFD ビルドはこの開発用 WSL では実行していません。
 
 2026-10-27、ARM64 [40206466748](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/40206466748) と amd64 [40206879065](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/40206879065) がともに成功したことを確認しました。Docker 新規導入、各 CLI・Crew 導入、CFD ビルド・計算・描画・動画生成、未認証状態と Crew 停止の確認まで通過しています。Kiro CLI 2.34.0、Crew 0.9.0、OpenCode 1.19.4、Codex CLI 0.164.0 と Docker 関連パッケージの採用版は共通です。認証・ブラウザー・WSL 新規作成・Proxy 経由通信は今回の CI の合格対象に含めません。
+
+## Windows セットアップ・当日操作の実装
+
+2026-10-27、`codex/windows-launchers` で Setup.ps1、KiroLogin.ps1、StartCrew.ps1、StopCrew.ps1 と手順書を実装しました。Ubuntu の新規インポート、ユーザー初期化、配置、工程再開、設定・ショートカット、対話認証のブラウザー連携を提供します。
+
+[Windows CI 40356116711](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/40356116711) で windows-2025（x64）と windows-11-arm の各 PowerShell 5.1／7 がすべて成功しました。CPU のネイティブ判定、構文、設定、対象登録照合、新規作成・再開の制御、認証状態分岐、起動終了コマンド、アクセス URL の検証を確認しました。WSL コマンド・ブラウザー・ダウンロードはモックであり、実際の環境作成や認証の成功を示すものではありません。Linux のソース検査と24件のテストも通過しています。
+
+Windows 実機での初回 WSL 構築、sudo パスワード入力、実際のショートカット作成・クリック、認証と既定ブラウザー、Windows 再起動後の復帰、Proxy 通信は未検証です。受講者向け正式リリース前の受け入れ項目として残します。操作手順は [Windows 手順](windows.md) を参照してください。
