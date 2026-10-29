@@ -91,6 +91,14 @@ elif name=='curl':
 elif name=='docker':
     if a[0]=='context': print('unix:///var/run/docker.sock')
     elif a[0]=='info': print('Ubuntu|linux|'+os.environ['MOCK_ARCH'])
+    elif a[0]=='compose' and '/opt/workshop-smoke/run.sh' in a:
+        status=int(os.environ.get('MOCK_SMOKE_EXIT','0'))
+        if status: sys.exit(status)
+        root=pathlib.Path(a[a.index('--project-directory')+1])
+        result=root/'work'/pathlib.Path(a[-1]).name
+        (result/'cavity.mp4').write_bytes(b'mock-video')
+        (result/'persistence.txt').write_text('mock-persistence')
+        (result/'result.json').write_text('{"status":"passed"}')
 elif name=='sudo':
     if a==['-v']: sys.exit(0)
     if 'bash' in a:
@@ -243,6 +251,27 @@ archive_binary opencode
         records = list((project/'work').glob('build-*'))
         self.assertEqual(len(records), 1)
         self.assertEqual((records[0]/'git-status.txt').read_text().strip(), 'unavailable-zip')
+
+    def test_zip_smoke_runs_without_git_on_both_cpus_and_preserves_failure(self):
+        import shutil
+        for cpu in ('aarch64', 'x86_64'):
+            for status in (0, 42):
+                with self.subTest(cpu=cpu, status=status):
+                    project = self.home / f'ZIP smoke {cpu} {status}'
+                    shutil.copytree(ROOT/'scripts', project/'scripts')
+                    shutil.copytree(ROOT/'compose', project/'compose')
+                    shutil.copy2(ROOT/'versions.env', project/'versions.env')
+                    self.env['MOCK_ARCH'] = cpu
+                    self.env['MOCK_SMOKE_EXIT'] = str(status)
+                    p = subprocess.run(['bash', str(project/'scripts/smoke-test.sh')],
+                                       env=self.env, text=True, capture_output=True, timeout=15)
+                    self.assertEqual(p.returncode, status, p.stderr)
+                    self.assertNotIn('fatal: not a git repository', p.stderr)
+                    records = list((project/'work').glob('smoke-*'))
+                    self.assertEqual(len(records), 1)
+                    self.assertEqual((records[0]/'git-status.txt').read_text().strip(), 'unavailable-zip')
+                    if status == 0:
+                        self.assertEqual(json.loads((records[0]/'result.json').read_text())['status'], 'passed')
 
     def test_stop_targets_only_configured_unit_and_is_idempotent(self):
         (self.home / 'active').touch()
