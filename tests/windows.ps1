@@ -15,7 +15,16 @@ foreach ($name in @('bad name','../bad','bad;echo','bad"name')) { Must-Fail { As
 foreach ($name in @('root','UPPER','bad name','x;echo')) { Must-Fail { Assert-Names 'test' $name } }
 Check ((ConvertTo-NativeArgument 'a b') -eq '"a b"') 'Space quoting'
 Check ((ConvertTo-NativeArgument 'a"b') -eq '"a\"b"') 'Quote escaping'
-Check ((ConvertTo-NativeArgument 'C:\path\') -eq '"C:\path\\"') 'Trailing backslash escaping'
+Check ((ConvertTo-NativeArgument '--status') -eq '--status') 'Do not quote WSL options'
+Check ((ConvertTo-NativeArgument 'ubuntu_of_kiro') -eq 'ubuntu_of_kiro') 'Do not quote a simple WSL name'
+Check ((ConvertTo-NativeArgument '') -eq '""') 'Empty argument must stay empty'
+Check ((ConvertTo-NativeArgument 'C:\path\') -eq 'C:\path\') 'Do not quote a path without spaces'
+Check ((ConvertTo-NativeArgument 'C:\path with spaces\') -eq '"C:\path with spaces\\"') 'Quoted trailing backslash escaping'
+Assert-WslReady ([pscustomobject]@{Code=0;Output='ready';Error=''})
+$message=''
+try { Assert-WslReady ([pscustomobject]@{Code=45;Output='stdout error detail';Error='stderr error detail'}) } catch { $message=$_.Exception.Message }
+Check ($message -match 'exit 45') 'WSL status exit code must be visible'
+Check ($message -match 'stdout error detail' -and $message -match 'stderr error detail') 'Both WSL error streams must be visible'
 
 $temp = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
 [void][IO.Directory]::CreateDirectory($temp)
@@ -25,9 +34,11 @@ try {
         schema=1; distroName='custom-env'; linuxUser='workshop'; projectPath='/home/workshop/opencae-workshop2026-env'
         port=5476; environmentId=[guid]::NewGuid().ToString(); phase='Ready'; registrationId='test-registration'; installLocation=$temp
     }
+    $config | Add-Member -NotePropertyName displayName -NotePropertyValue ([string][char]0x65e5 + [char]0x672c + [char]0x8a9e)
     Save-Environment $path $config
     $loaded=Read-Environment $path
     Check ($loaded.distroName -eq 'custom-env') 'Configuration roundtrip'
+    Check ($loaded.displayName -eq $config.displayName) 'UTF-8 configuration must preserve Japanese text'
     $script:registration=[pscustomobject]@{Id='test-registration';BasePath=$temp;Version=2}
     function Get-WslRegistration { param($DistroName) return $script:registration }
     Assert-Registration $config
@@ -94,6 +105,7 @@ if ($env:OS -eq 'Windows_NT') {
         $script:setupCalls+=,@($Arguments)
         $code=0; $output=''
         if ($Arguments -contains '--import') {
+            Check (Test-Path -LiteralPath $Arguments[2] -PathType Container) 'Import directory must exist before wsl --import'
             $script:setupRegistration=[pscustomobject]@{Id='created-id';BasePath=$Arguments[2];Version=2}
         } elseif ($Arguments -contains 'wslpath') { $output='/mnt/source with spaces' }
         elseif ($Arguments -contains 'cat') {
@@ -121,6 +133,14 @@ if ($env:OS -eq 'Windows_NT') {
         # 別の設定記録がない登録済み環境を流用しない。
         $bad.DistroName='unrelated'
         Must-Fail { Invoke-WorkshopSetup @bad }
+        $script:pathPrompt=''
+        function Read-Host { param($Prompt) $script:pathPrompt=$Prompt; return '' }
+        Invoke-WorkshopSetup -DistroName test-new -UserName workshop -Port 5480
+        Check ($script:pathPrompt.Contains($options.InstallLocation)) 'Resume prompt must suggest the saved location'
+        Check ((Read-Environment $file).installLocation -eq $options.InstallLocation) 'Enter must preserve the saved location'
+        $script:pathPrompt=''
+        Invoke-WorkshopSetup @options
+        Check ($script:pathPrompt -eq '') 'Explicit InstallLocation must not prompt'
     } finally {
         $env:LOCALAPPDATA=$previousLocalAppData
         Remove-Item -LiteralPath $temp -Recurse -Force

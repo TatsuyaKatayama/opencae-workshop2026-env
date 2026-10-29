@@ -12,7 +12,7 @@ Windows 11 ARM64／x64 が対象です。事前に専用の WSL2 Ubuntu 24.04 �
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\Setup.ps1 -UserName workshop
 ```
 
-Linux ユーザー名を省略すると入力を求めます。新しい Linux ユーザーの sudo 用パスワードは端末で2回入力します（文字は表示されません）。認証情報はセットアップに保存しません。
+Linux ユーザー名を省略すると入力を求めます。保存先も `-InstallLocation` を省略すると入力を求め、Enter だけなら表示された既定値を使用します。再開時は記録済みの保存先を候補にします。新しい Linux ユーザーの sudo 用パスワードは端末で2回入力します（文字は表示されません）。認証情報はセットアップに保存しません。
 
 環境名・保存先・Crew ポートを変える場合：
 

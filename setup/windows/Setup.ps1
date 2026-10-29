@@ -24,14 +24,19 @@ param(
     Assert-Names $DistroName $UserName
     $homeDirectory = Join-Path $env:LOCALAPPDATA "OpenCAE\environments\$DistroName"
     $configPath = Join-Path $homeDirectory 'environment.json'
-    if (!$InstallLocation) { $InstallLocation = Join-Path $env:LOCALAPPDATA "OpenCAE\WSL\$DistroName" }
+    if (!$InstallLocation) {
+        $defaultLocation = Join-Path $env:LOCALAPPDATA "OpenCAE\WSL\$DistroName"
+        if (Test-Path -LiteralPath $configPath) { $defaultLocation = (Read-Environment $configPath).installLocation }
+        $answer = Read-Host "WSL install location [$defaultLocation] (Enter to accept)"
+        $InstallLocation = if ([string]::IsNullOrWhiteSpace($answer)) { $defaultLocation } else { $answer.Trim() }
+    }
     $InstallLocation = [IO.Path]::GetFullPath($InstallLocation)
     if ($InstallLocation -notmatch '^[A-Za-z]:\\' -or $InstallLocation -match '[\r\n]') { throw 'Use an absolute path on a local Windows drive.' }
     if ($EnableProxyPreview -ne [bool]$ProxyConfig) { throw 'Specify both -EnableProxyPreview and -ProxyConfig.' }
     $proxyEnvironment = @()
     $webProxy = $null
     if ($EnableProxyPreview) {
-        $proxy = Get-Content -LiteralPath $ProxyConfig -Raw | ConvertFrom-Json
+        $proxy = Get-Content -LiteralPath $ProxyConfig -Raw -Encoding UTF8 | ConvertFrom-Json
         foreach ($name in @('httpProxy','httpsProxy')) {
             $value = [string]$proxy.$name
             if ($value) {
@@ -73,7 +78,7 @@ param(
     }
     if (!$registration) {
         if ((Test-Path -LiteralPath $InstallLocation) -and @(Get-ChildItem -LiteralPath $InstallLocation -Force).Count) { throw 'Install location contains data. Inspect the interrupted import manually.' }
-        $images = Get-Content -LiteralPath (Join-Path $repo 'setup/config/wsl.json') -Raw | ConvertFrom-Json
+        $images = Get-Content -LiteralPath (Join-Path $repo 'setup/config/wsl.json') -Raw -Encoding UTF8 | ConvertFrom-Json
         $image = $images.$arch
         $cache = Join-Path $env:LOCALAPPDATA 'OpenCAE\downloads'
         [void][IO.Directory]::CreateDirectory($cache)
@@ -86,6 +91,7 @@ param(
             if ((Get-FileHash -LiteralPath ($archive+'.part') -Algorithm SHA256).Hash -ine $image.sha256) { throw 'Ubuntu rootfs SHA256 mismatch.' }
             Move-Item -LiteralPath ($archive+'.part') -Destination $archive -Force
         }
+        [void][IO.Directory]::CreateDirectory($InstallLocation)
         $result = Invoke-Wsl -Arguments @('--import',$DistroName,$InstallLocation,$archive,'--version','2')
         Assert-WslResult $result 'Ubuntu import'
         $registration = Get-WslRegistration $DistroName
