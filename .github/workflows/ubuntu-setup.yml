@@ -8,7 +8,7 @@ on:
         options: [amd64, arm64, both]
         default: amd64
   push:
-    branches: [codex/ubuntu2404-setup]
+    branches: [main]
     paths:
       - setup/**
       - tests/**

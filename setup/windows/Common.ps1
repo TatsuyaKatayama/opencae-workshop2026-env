@@ -9,6 +9,8 @@ function Assert-Names {
 
 function ConvertTo-NativeArgument {
     param([AllowEmptyString()][string]$Value)
+    # WSL のオプション・空白のない値には不要な引用符を付けない。
+    if ($Value.Length -gt 0 -and $Value -notmatch '[\s"]') { return $Value }
     # CommandLineToArgvW quoting, including backslashes before quotes/end.
     '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
 }
@@ -46,6 +48,17 @@ function Assert-WslResult {
     if ($Result.Code -ne 0) { throw "$Operation failed (exit $($Result.Code)). $($Result.Error)" }
 }
 
+function Assert-WslReady {
+    param($Result)
+    if ($Result.Code -ne 0) {
+        # wsl.exe はエラーを stdout に出す場合もあるため、両方を表示する。
+        $details = @($Result.Error.Trim(), $Result.Output.Trim()) | Where-Object { $_ }
+        throw ("WSL is not ready (exit $($Result.Code))." + [Environment]::NewLine +
+            ($details -join [Environment]::NewLine) + [Environment]::NewLine +
+            'Check the details above. If WSL is not installed, run wsl --install --no-distribution, restart Windows, then retry.')
+    }
+}
+
 function Save-Environment {
     param([string]$Path, $Config)
     $directory = Split-Path -Parent $Path
@@ -59,7 +72,7 @@ function Save-Environment {
 
 function Read-Environment {
     param([string]$Path)
-    $config = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    $config = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-Names $config.distroName $config.linuxUser
     if ($config.schema -ne 1 -or $config.projectPath -ne "/home/$($config.linuxUser)/opencae-workshop2026-env" -or
         $config.port -lt 1024 -or $config.port -gt 65535 -or $config.environmentId -notmatch '^[0-9a-f-]{36}$') {
@@ -161,6 +174,6 @@ function Get-SetupArchitecture {
     if ([Environment]::OSVersion.Version.Build -lt 22000) { throw 'Windows 11 is required.' }
     if (!(Get-Command wsl.exe -ErrorAction SilentlyContinue)) { throw 'Install WSL first: wsl --install --no-distribution. Restart Windows, then retry.' }
     $result = Invoke-Wsl -Capture -Arguments @('--status')
-    if ($result.Code -ne 0) { throw 'WSL is not ready. Run wsl --install --no-distribution, restart Windows, then retry.' }
+    Assert-WslReady $result
     return Get-WindowsCpu
 }
