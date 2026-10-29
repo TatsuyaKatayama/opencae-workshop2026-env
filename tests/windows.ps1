@@ -33,6 +33,31 @@ foreach ($empty in @('', $null)) {
     Check ($message -match 'exit 45' -and $message -match 'no error details') 'Empty output must not hide the WSL failure'
 }
 
+# Read-only registry mocks: metadata keys must not be treated as distributions.
+& {
+    function Test-Path { param($Path) return $true }
+    function Get-ChildItem {
+        param($Path)
+        @([pscustomobject]@{PSChildName='AppxInstallerCache';PSPath='ignored'},
+          [pscustomobject]@{PSChildName='{11111111-1111-1111-1111-111111111111}';PSPath='metadata'},
+          [pscustomobject]@{PSChildName='{22222222-2222-2222-2222-222222222222}';PSPath='valid'})
+    }
+    function Get-ItemProperty {
+        param($Path)
+        if ($Path -eq 'ignored') { throw 'Non-distribution key must not be read' }
+        if ($Path -eq 'metadata') { return [pscustomobject]@{Other=1} }
+        return [pscustomobject]@{DistributionName='example';BasePath='C:\WSL\example';Version=2}
+    }
+    $found=Get-WslRegistration 'example'
+    Check ($found.Id -eq '{22222222-2222-2222-2222-222222222222}') 'Distribution must be found after metadata keys'
+    Check ($found.BasePath -eq 'C:\WSL\example' -and $found.Version -eq 2) 'WSL registration values changed'
+    Check ($null -eq (Get-WslRegistration 'missing')) 'Absent distribution must return null'
+    function Get-ItemProperty { param($Path) return [pscustomobject]@{DistributionName='example'} }
+    $message=''
+    try { Get-WslRegistration 'example' } catch { $message=$_.Exception.Message }
+    Check ($message -match 'Incomplete WSL registration') 'Incomplete target must produce a clear error'
+}
+
 $temp = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
 [void][IO.Directory]::CreateDirectory($temp)
 try {

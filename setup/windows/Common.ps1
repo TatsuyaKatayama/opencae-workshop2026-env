@@ -90,9 +90,16 @@ function Get-WslRegistration {
     $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss'
     if (!(Test-Path $key)) { return $null }
     foreach ($item in Get-ChildItem $key) {
+        # Lxss also contains metadata keys that are not distributions.
+        if ($item.PSChildName -notmatch '^\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}$') { continue }
         $p = Get-ItemProperty $item.PSPath
-        if ($p.DistributionName -ieq $DistroName) {
-            return [pscustomobject]@{ Id=$item.PSChildName; BasePath=$p.BasePath; Version=$p.Version }
+        $name = $p.PSObject.Properties['DistributionName']
+        if ($null -eq $name -or [string]::IsNullOrWhiteSpace([string]$name.Value)) { continue }
+        if ($name.Value -ieq $DistroName) {
+            $basePath = $p.PSObject.Properties['BasePath']
+            $version = $p.PSObject.Properties['Version']
+            if ($null -eq $basePath -or $null -eq $version) { throw "Incomplete WSL registration: $DistroName (BasePath or Version is missing)." }
+            return [pscustomobject]@{ Id=$item.PSChildName; BasePath=$basePath.Value; Version=$version.Value }
         }
     }
     return $null
