@@ -1,4 +1,4 @@
-param([string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot))
+﻿param([string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot))
 $ErrorActionPreference = 'Stop'
 . (Join-Path $RepositoryRoot 'setup/windows/Common.ps1')
 $count = 0
@@ -6,6 +6,8 @@ function Check { param([bool]$Condition,[string]$Message) if (!$Condition) { thr
 function Must-Fail { param([scriptblock]$Code) $failed=$false; try { & $Code } catch { $failed=$true }; Check $failed 'Expected failure' }
 
 foreach ($file in Get-ChildItem (Join-Path $RepositoryRoot 'setup/windows') -Filter '*.ps1') {
+    $bytes = [IO.File]::ReadAllBytes($file.FullName)
+    Check ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) "UTF-8 BOM missing: $($file.Name)"
     $tokens=$null; $errors=$null
     [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName,[ref]$tokens,[ref]$errors)
     Check ($errors.Count -eq 0) "Parse failure: $($file.Name): $errors"
@@ -25,6 +27,11 @@ $message=''
 try { Assert-WslReady ([pscustomobject]@{Code=45;Output='stdout error detail';Error='stderr error detail'}) } catch { $message=$_.Exception.Message }
 Check ($message -match 'exit 45') 'WSL status exit code must be visible'
 Check ($message -match 'stdout error detail' -and $message -match 'stderr error detail') 'Both WSL error streams must be visible'
+foreach ($empty in @('', $null)) {
+    $message=''
+    try { Assert-WslReady ([pscustomobject]@{Code=45;Output=$empty;Error=$empty}) } catch { $message=$_.Exception.Message }
+    Check ($message -match 'exit 45' -and $message -match 'no error details') 'Empty output must not hide the WSL failure'
+}
 
 $temp = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
 [void][IO.Directory]::CreateDirectory($temp)

@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Assert-Names {
@@ -50,9 +50,13 @@ function Assert-WslResult {
 
 function Assert-WslReady {
     param($Result)
+    [string[]]$details = @()
     if ($Result.Code -ne 0) {
-        # wsl.exe はエラーを stdout に出す場合もあるため、両方を表示する。
-        $details = @($Result.Error.Trim(), $Result.Output.Trim()) | Where-Object { $_ }
+        # wsl.exe can report failures on either stdout or stderr.
+        foreach ($text in @([string]$Result.Error, [string]$Result.Output)) {
+            if (![string]::IsNullOrWhiteSpace($text)) { $details += $text.Trim() }
+        }
+        if ($details.Count -eq 0) { $details = @('wsl.exe returned no error details.') }
         throw ("WSL is not ready (exit $($Result.Code))." + [Environment]::NewLine +
             ($details -join [Environment]::NewLine) + [Environment]::NewLine +
             'Check the details above. If WSL is not installed, run wsl --install --no-distribution, restart Windows, then retry.')
