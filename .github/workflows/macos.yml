@@ -23,6 +23,7 @@ jobs:
           for script in setup/macos/*.sh setup/macos/*.command scripts/*.sh scripts/lib/*.sh; do /bin/bash -n "$script"; done
           /bin/bash setup/macos/setup.sh --plan
           python3 -m unittest discover -s tests -p 'test_macos.py' -v
+          python3 -m unittest discover -s tests -p 'test_homebrew.py' -v
           python3 -m unittest discover -s tests -p 'test_commands.py' -v
           python3 -m unittest discover -s tests -p 'test_login_browser.py' -v
       - name: Install pinned macOS host binaries without Docker or CFD

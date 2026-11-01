@@ -54,7 +54,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\UpdateLa
 
 ## Apple Silicon Mac
 
-macOS 15 以降とネイティブ Homebrew を用意し、プロジェクト内で実行します。Docker Desktop は使わず、専用 Colima で Linux ARM64 コンテナを動かします。
+macOS 15 以降の Apple Silicon Macで、プロジェクト内から実行します。Homebrewは既存環境を再利用し、未導入なら公式インストーラーを自動起動します。管理者パスワード等は画面の案内に従って入力してください。Docker Desktop は使わず、専用 Colima で Linux ARM64 コンテナを動かします。
 
 ```bash
 bash setup/macos/setup.sh

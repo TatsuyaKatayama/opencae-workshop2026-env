@@ -150,3 +150,11 @@ ARM64 ParaViewは同じ5.13.3のconda-forge `py312hcc5151f_8_osmesa` 配布物�
 - [共通ソース検査](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313735917)。
 
 [issue #1](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/issues/1) は別途確認しました。`colima ssh` は通常利用には不要な診断操作であり、今回の構成はCrewとCLIをMac上、計算処理をDocker CLI／Compose経由で実行します。NginxのHTTPポート転送検証は本プロジェクトの必須経路ではなく、既存のCFD Composeとスモークケースを検証の中心としています。issue本文のチェックリストは変更・クローズしていません。Colimaを含むMac実機の通し確認、個人認証、Finder操作は未実施であり、CI成功で代替しません。
+
+## Homebrewの初回自動導入（2026-11-01）
+
+Homebrew手動導入の前提を変更し、セットアップ内で既存の `/opt/homebrew` を確認・再利用し、未導入なら公式インストーラーを起動する処理を追加しました。公式スクリプトはHomebrew/installのコミット `8c82c081753d4263da0cfe615ef8d9433425f22b` とSHA256を固定しています。対話入力を維持し、ハッシュ不一致・取得失敗・導入失敗・導入後の配置先不一致は後続工程へ進めません。`--plan` は導入・通信を行いません。
+
+専用hello-world／SSH／Nginxテストは追加せず、通常セットアップで自動実行するOpenFOAMの共通スモークで今回のCFD利用経路を確認する方針にしました。実際のMacでのHomebrew初回導入（sudo入力・Command Line Toolsを含む）と、Colima経由の通し確認は引き続き未実施です。issue本文の変更やクローズ、develop／mainへのマージ・タグ・リリースは行っていません。
+
+ローカルの共通検査は74テスト（LinuxではmacOS実launchd専用の1件をスキップ）が通過しました。Homebrew制御の8件は既存環境・初回導入・非対話拒否・SHA256不一致・取得失敗・導入失敗・再実行・一時ファイル清掃をテスト用スクリプトで確認しています。

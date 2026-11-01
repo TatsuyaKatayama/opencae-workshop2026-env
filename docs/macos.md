@@ -12,11 +12,11 @@ Colima profile は `opencae-workshop2026`、Docker context は `colima-opencae-w
 
 Colima はコンテナ用の VM です。CLI の認証と Crew の Web サーバーは Mac 上で動作するため、WSL の稼働維持処理は使いません。
 
-通常利用で `colima ssh` によるVMへのログインは不要です。VM内部のOS確認や障害調査が必要な場合にだけ使用します。CrewのHTTPサーバーもMac上にあるため、Nginxを使ったコンテナのポート公開は必須の確認経路ではありません。計算用途のComposeは共通のCFDスモークケースで確認します。
+通常利用で `colima ssh` によるVMへのログインは不要です。VM内部のOS確認や障害調査が必要な場合にだけ使用します。専用のhello-world／SSH／Nginx検証は追加せず、OpenFOAMの共通スモークケースをセットアップから自動実行し、Composeによるコンテナ実行・計算・MPI・描画・動画・共有データの保持と所有権を確認します。CrewのHTTPサーバーはMac上で動作し、今回のCFD用途ではコンテナからのポート公開を必要としません。
 
 ## 事前準備
 
-1. [Homebrew の公式手順](https://brew.sh/ja/)でネイティブ ARM64 版を導入します。必要な Command Line Tools や管理者操作もこの段階で完了してください。セットアップは `/opt/homebrew/bin/brew` を使用します。
+1. macOS 15以降のApple Silicon Macを使用します。Homebrewの事前手動導入は不要です。セットアップは `/opt/homebrew/bin/brew` の既存環境を確認し、未導入なら公式インストーラーを起動します。
 2. プロジェクトを clone または ZIP で取得し、ローカルディスクのホーム配下へ配置します。例：`~/opencae-workshop2026-env`。iCloud 管理フォルダーや外付けディスクは初回検証対象にしません。構築後は配置先を変更しないでください。
 3. 通常ユーザーの Terminal で実行します。セットアップ全体を `sudo` で起動しません。
 
@@ -33,6 +33,10 @@ Finder からは `setup/macos/0_Setup.command` をダブルクリックできま
 ```bash
 bash setup/macos/setup.sh --port 5476 --cpu 4 --memory 8 --disk 100
 ```
+
+Homebrewの初回導入は対話端末で行います。管理者パスワード、実行確認、AppleのCommand Line Tools導入などを求められた場合は公式インストーラーの案内に従ってください。セットアップ全体をsudoで起動する必要はありません。既存のHomebrewは配置先・動作を確認して再利用し、初回導入用インストーラーを再実行しません。
+
+公式インストーラーは [homebrew.env](../setup/config/homebrew.env) のコミットURLとSHA256を確認してから実行します。取得失敗・ハッシュ不一致・導入失敗では後続工程へ進みません。非対話端末で未導入の場合は、Terminal／`0_Setup.command` での再実行を案内します。基盤の更新方針は [Homebrew公式手順](https://docs.brew.sh/Installation)も参照してください。
 
 同じ配置先・port・VM オプション・ツール版で再実行すると途中から再開できます。失敗した工程を記録し、既存データを削除しません。CFD の構築・検証は通常モードで毎回実行しますが、Docker のキャッシュを使用します。
 
@@ -104,6 +108,6 @@ ARM64 ParaView は `/opt/paraview` の専用 Python 3.12、一般後処理は `/
 
 標準 macOS CI はネストした VZ を前提にしません。標準 Bash 3.2 の構文・制御テスト、ダミーHTTPサービスを使った実launchdの起動・再利用・停止と、macOS バイナリの実導入・版確認・再導入・未認証状態・ACP 初期応答を確認します。`--agents-only` はこのためのモードで、Colima／CFD を構築しません。
 
-Apple Silicon 実機では、Homebrew の初回導入、Colima 新規作成と再起動、CFD ビルド・共通スモーク、Finder のダブルクリック、3種の認証、既定ブラウザー、Crew 経由の会話、Terminal を閉じた後の継続、Stop直後の再起動を確認してください。Mac の Proxy 自動設定は今回の実装対象外です。Windows の Proxy プレビューと同じ検証済み範囲とは扱いません。
+Apple Silicon 実機では、Homebrew未導入からの自動導入（管理者入力・Command Line Toolsを含む）、Colima 新規作成と再起動、CFD ビルド・共通スモーク、Finder のダブルクリック、3種の認証、既定ブラウザー、Crew 経由の会話、Terminal を閉じた後の継続、Stop直後の再起動を確認してください。Mac の Proxy 自動設定は今回の実装対象外です。Windows の Proxy プレビューと同じ検証済み範囲とは扱いません。
 
 参考：[Colima 導入](https://colima.run/docs/installation/)・[Lima の virtiofs](https://lima-vm.io/docs/config/mount/)・[GitHub macOS ランナーの制約](https://docs.github.com/en/actions/reference/runners/github-hosted-runners#limitations-for-arm64-macos-runners)。

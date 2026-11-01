@@ -220,7 +220,7 @@ Proxy 対応はプレビュー実装とし、通常経路と区別して対応�
 
 ## 6. macOS への展開
 
-Apple Silicon Mac では Windows／WSL の準備を macOS 用セットアップに置き換える。macOS 上に Crew、Kiro CLI、OpenCode、Codex CLI、Python、Git、Docker CLI／Compose／Buildx とコンテナ実行基盤を導入する。対象は macOS 15 以降の Apple Silicon とし、ネイティブ Homebrew を前提に Colima の専用 profile を構築する。Docker Desktop は導入しない。VZ・virtiofs・linux/arm64 を用い、既定値は CPU 2・メモリ8GiB・ディスク上限100GiB。
+Apple Silicon Mac では Windows／WSL の準備を macOS 用セットアップに置き換える。macOS 上に Crew、Kiro CLI、OpenCode、Codex CLI、Python、Git、Docker CLI／Compose／Buildx とコンテナ実行基盤を導入する。対象は macOS 15 以降の Apple Silicon とし、ネイティブ Homebrew を既存環境から再利用し、未導入ならセットアップから公式インストーラーを対話実行して導入する。インストーラーのコミットURLとSHA256を固定し、管理者パスワード・Command Line Toolsの確認は公式インストーラーに任せる。その後Colima の専用 profile を構築する。Docker Desktop は導入しない。VZ・virtiofs・linux/arm64 を用い、既定値は CPU 2・メモリ8GiB・ディスク上限100GiB。
 
 Docker 層の Dockerfile、Compose 定義、作業フォルダー構成は共通化し、Mac でも linux/arm64 イメージをローカルビルドする。ホスト側の CLI は macOS 用を導入する。Windows 固有処理を Dockerfile や共通の起動処理へ含めない。
 
@@ -228,7 +228,7 @@ macOS の CLI は `~/.local/share/opencae/macos` に分離し、固定 URL・SHA
 
 専用 Docker context `colima-opencae-workshop2026` を各コマンドと Crew に渡し、他用途の既定 context は切り替えない。Crew は専用 launchd job とし、Terminal を閉じても継続する。plist はログイン時の自動起動領域に置かず、Stop は対象 job だけを登録解除する。VM と計算コンテナは停止しない。保存設定を照合して同じ工程を再開可能にする。
 
-標準 macOS CI はホストバイナリ導入・ACP・制御を確認し、ネストした VZ を必要とする Colima と CFD の通し確認は Apple Silicon 実機に分ける。Proxy 自動設定は macOS では対象外とする。詳細は [macOS 手順](docs/macos.md) とテスト計画に記録する。
+標準 macOS CI はホストバイナリ導入・ACP・制御を確認し、ネストした VZ を必要とする Colima と CFD の通し確認は Apple Silicon 実機に分ける。Proxy 自動設定は macOS では対象外とする。 hello-world／SSH／Nginxの専用検証は追加せず、セットアップでOpenFOAMの共通スモークを自動実行し、Composeの実行・削除、計算、MPI、描画、動画、共有フォルダーの永続化・権限を確認する。コンテナのHTTPポート転送は今回のCFD利用経路に含まれない。詳細は [macOS 手順](docs/macos.md) とテスト計画に記録する。
 
 ## 7. 環境構築の完了条件
 

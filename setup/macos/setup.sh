@@ -11,7 +11,7 @@ while (( $# )); do
         --agents-only) agents_only=1; shift ;;
         --help|-h)
             echo 'setup.sh [--port 5476] [--cpu 2] [--memory 8] [--disk 100] [--plan] [--agents-only]'
-            echo 'Apple Silicon / macOS 15+ / Homebrew が必要です。memory・disk は GiB。--plan は変更・通信なし。'
+            echo 'Apple Silicon / macOS 15+ が必要です。Homebrew は未導入なら公式インストーラーで導入します。memory・disk は GiB。--plan は変更・通信なし。'
             exit 0 ;;
         *) mac_die "未対応の引数: $1" ;;
     esac
@@ -23,11 +23,12 @@ done
 mac_platform
 if (( plan )); then
     printf 'CPU=arm64\nport=%s\nColima: cpu=%s memory=%sGiB disk=%sGiB\n' "$port" "$cpu" "$memory" "$disk"
-    if (( agents_only )); then echo '工程: prerequisites agents crew-config（Docker・CFD なし）'
-    else echo '工程: prerequisites agents crew-config colima cfd-build cfd-check'; fi
+    if (( agents_only )); then echo '工程: homebrew prerequisites agents crew-config（Docker・CFD なし）'
+    else echo '工程: homebrew prerequisites agents crew-config colima cfd-build cfd-check'; fi
     exit 0
 fi
-[[ -x /opt/homebrew/bin/brew ]] || mac_die 'Homebrew が必要です。https://brew.sh/ja/ の公式手順で導入してから再実行してください。'
+source "$MAC_ROOT/setup/macos/homebrew.sh"
+mac_bootstrap_homebrew
 # --force-bottle で Homebrew のソースビルドへの自動フォールバックを禁止。
 export HOMEBREW_NO_AUTO_UPDATE=1
 /opt/homebrew/bin/brew install --force-bottle python@3.12 pipx git

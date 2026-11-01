@@ -86,6 +86,7 @@ Windows ARM64／x64 それぞれで、配布取得 → Setup → Windows 再起�
 
 | ID | 対象 | 確認内容 | 自動化 |
 | --- | --- | --- | --- |
+| MAC-00 | Homebrew | 既存環境の配置先・版確認、未導入なら公式インストーラー実行、対話入力維持、URL・SHA256検証、取得・導入失敗で停止、一時ファイル清掃、再実行 | Bash制御CI／管理者入力・CLTの初回実導入は実機 |
 | MAC-01 | setup.sh | Apple Silicon・macOS 15+・通常ユーザー、数値・未知引数、--planで変更や通信なし | 標準 Bash 構文・制御CI／実機 |
 | MAC-02 | 導入 | 公式 macOS バイナリの版・SHA256、Kiro署名、Crew wheelのみ、既存CLIの非上書き | macOSバイナリCI |
 | MAC-03 | 再実行 | 同設定で再開、異なる設定は拒否、成功状態と選択バックエンドを保持 | 制御CI・再導入CI |
@@ -101,3 +102,7 @@ Windows ARM64／x64 それぞれで、配布取得 → Setup → Windows 再起�
 macOS標準CIはVZのネストした仮想化を要求しない。`--agents-only` でホストCLI・Crew・ACPを実導入し、ColimaとCFDは構築しない。Mac実機の成功をモックCIで代替しない。Intel Mac・Proxy自動設定は今回の対象外。
 
 ARM64 ParaViewの取得方式を変更したため、コンテナのCIでは `vtkOSOpenGLRenderWindow` と llvmpipe、OpenFOAMReader、一般後処理venvとの分離、ffmpeg、MPIも再確認する。ロックはconda-forge URLと全依存SHA256を固定し、開発用WSLでは導入・ビルドしない。
+
+Homebrew初回導入の制御テストは実際のインストーラー・sudoを実行せず、テスト用スクリプトに置き換える。macOS CIでは標準Bashでも同じ分岐を確認し、ランナーの既存Homebrewを使う実セットアップも継続する。開発ホストへのHomebrew導入やCLI導入は行わない。
+
+Macの通常導入では既存のOpenFOAMスモークを自動実行する。hello-world／SSHログイン／Nginxの専用テストは必須にしない。コンテナからのHTTP公開を使わない今回の構成では、ポート転送の成功をCFDの完了条件に含めない。
