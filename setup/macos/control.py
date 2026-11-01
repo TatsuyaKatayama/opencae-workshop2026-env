@@ -3,13 +3,11 @@ import argparse
 from contextlib import contextmanager
 import fcntl
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
 import plistlib
 import re
-import shutil
 import socket
 import subprocess
 import sys
@@ -110,9 +108,9 @@ class Settings:
         self.config = d
         return d
 
-    def run(self, command, capture=False, check=True, timeout=120):
+    def run(self, command, capture=False, check=True, timeout=120, stdin=None):
         return subprocess.run([str(x) for x in command], cwd=self.root, env=self.env, check=check,
-                              capture_output=capture, text=True, timeout=timeout)
+                              capture_output=capture, text=True, timeout=timeout, stdin=stdin)
 
     @property
     def label(self):
@@ -142,7 +140,7 @@ class Settings:
         if status.returncode != 0:
             self.run(['colima', '--profile', PROFILE, 'start', '--activate=false', '--arch', 'aarch64',
                       '--vm-type', 'vz', '--mount-type', 'virtiofs', '--runtime', 'docker',
-                      '--cpu', self.config['cpu'], '--memory', self.config['memory'], '--disk', self.config['disk'],
+                      '--cpus', self.config['cpu'], '--memory', self.config['memory'], '--disk', self.config['disk'],
                       '--mount', str(self.root) + ':w'], timeout=1200)
         # Docker Desktop、別 context、別 CPU ではここで止める。
         self.run(['bash', '-c', 'source "$1"; require_engine', 'opencae', self.root / 'scripts/lib/common.sh'])
@@ -167,11 +165,12 @@ class Settings:
                 install_agents(self)
                 step = 'crew-config'
                 if self.config['phase'] == 'Initializing':
-                    self.run(['kirocrew', 'setup', '--agent-only'], timeout=300)
+                    self.run(['kirocrew', 'setup', '--agent-only'], timeout=300, stdin=subprocess.DEVNULL)
                     self.run(['kirocrew', 'config', 'set', 'dashboard.url', f"http://localhost:{self.config['port']}"])
                     self.run(['kirocrew', 'config', 'set', 'agent.acp_backend', 'kiro'])
                 self.run(['kirocrew', 'config', 'set', 'agent.kas_bundle', 'false'])
-                self.config['phase'] = 'AgentsReady'
+                if self.config['phase'] != 'Ready':
+                    self.config['phase'] = 'AgentsReady'
                 save_json(self.file, self.config)
                 if not args.agents_only:
                     step = 'colima'

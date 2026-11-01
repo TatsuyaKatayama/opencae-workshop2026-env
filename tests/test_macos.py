@@ -25,7 +25,7 @@ class MacTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.base = Path(self.tmp.name)
+        self.base = Path(self.tmp.name).resolve()
         self.root = self.base / '日本語 project'
         (self.root / 'setup/config/codex-acp').mkdir(parents=True)
         for name in ('agents.env', 'macos.env', 'codex-acp/package-lock.json'):
@@ -42,7 +42,7 @@ class MacTest(unittest.TestCase):
         for name in ('kirocrew', 'kiro-cli', 'codex', 'codex-acp', 'opencode'):
             (self.s.tools / 'bin' / name).touch()
 
-    def run_mock(self, command, capture=False, check=True, timeout=120):
+    def run_mock(self, command, capture=False, check=True, timeout=120, stdin=None):
         command = [str(x) for x in command]
         self.calls.append(command)
         out, code = '', 0
@@ -106,6 +106,13 @@ class MacTest(unittest.TestCase):
         self.assertEqual(self.s.load()['phase'], 'AgentsReady')
         self.assertEqual(self.calls.count(['kirocrew', 'config', 'set', 'agent.acp_backend', 'kiro']), 1)
         self.assertIn(['kirocrew', 'config', 'set', 'agent.kas_bundle', 'false'], self.calls)
+
+    def test_agents_only_preserves_ready_environment(self):
+        self.ready()
+        self.args.agents_only = True
+        with patch.object(mac, 'install_agents'):
+            self.s.setup(self.args)
+        self.assertEqual(self.s.load()['phase'], 'Ready')
 
     def test_full_setup_runs_common_build_and_smoke_and_records_ready(self):
         with patch.object(mac, 'install_agents'), patch.object(self.s, 'plugins'):
