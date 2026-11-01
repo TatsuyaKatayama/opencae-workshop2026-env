@@ -103,6 +103,7 @@ Bash が読み込む `*.env` は UTF-8（BOM なし）・LF 改行を維持し�
 
 ## 関連資料
 
+- [v2.0 リリースノート](docs/releases/v2.0.md)
 - [v1.0.0 リリースノート](docs/releases/v1.0.0.md)
 - [仕様書](PROJECT_SPEC.md)
 - [ビルド・キャッシュ・依存関係の更新](docs/image-build.md)
