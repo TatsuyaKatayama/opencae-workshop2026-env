@@ -61,7 +61,7 @@ run_step() {
 
 prerequisites() {
     sudo --preserve-env=http_proxy,https_proxy,no_proxy,HTTP_PROXY,HTTPS_PROXY,NO_PROXY apt-get update
-    sudo --preserve-env=http_proxy,https_proxy,no_proxy,HTTP_PROXY,HTTPS_PROXY,NO_PROXY apt-get install -y ca-certificates curl gnupg unzip python3 python3-venv python3-pip git dbus-user-session uidmap libatomic1
+    sudo --preserve-env=http_proxy,https_proxy,no_proxy,HTTP_PROXY,HTTPS_PROXY,NO_PROXY apt-get install -y ca-certificates curl gnupg unzip xz-utils python3 python3-venv python3-pip git dbus-user-session uidmap libatomic1 apparmor
     sudo loginctl enable-linger "$(id -un)"
     sudo systemctl start "user@$(id -u).service"
 }

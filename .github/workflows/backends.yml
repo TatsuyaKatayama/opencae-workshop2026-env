@@ -27,6 +27,7 @@ jobs:
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           test "$(kirocrew config get agent.acp_backend)" = kiro
+          kirocrew sandbox status --path "$(command -v kirocrew)"
           kiro-cli --version
           kirocrew --version
           opencode --version

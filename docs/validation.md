@@ -99,6 +99,8 @@ Windows 実機での初回 WSL 構築、sudo パスワード入力、実際の�
 
 Start Backend で Kiro CLI／Codex／OpenCode を選び、同じ WSL ユーザーで認証と Crew 設定を行う実装を追加しました。Crew 0.11.1、OpenCode 1.19.5、Codex CLI 0.166.0、Crew が想定する `@agentclientprotocol/codex-acp` 2.5.0、専用 Node.js 24.11.1 を固定しました。KAS は取得せず、初期選択を Kiro CLI に明示します。バックエンド未認証でも管理画面の起動を許可します。
 
-Windows 環境削除は登録・保存先・識別記録の照合、明示確認、WhatIf、失敗後の再開を実装しました。開発用 WSL ではソフトを導入・更新せず、CFD のビルドや実際の WSL 削除も実行していません。Python 33件、Linux 上の PowerShell 81項目とソース検査が通過しました。Windows 固有の追加制御、両 CPU の新規バイナリ導入・再実行・ACP 初期応答は CI で別途確認します。認証と Crew 経由の会話、実機 WSL 削除は未検証です。
+Windows 環境削除は登録・保存先・識別記録の照合、明示確認、WhatIf、失敗後の再開を実装しました。開発用 WSL ではソフトを導入・更新せず、CFD のビルドや実際の WSL 削除も実行していません。Python 33件、Linux 上の PowerShell 81項目とソース検査が通過しました。[Windows CI 41262362383](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41262362383) で x64／ARM64 の PowerShell 5.1／7 が成功し、[Backend binary checks 41262362316](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41262362316) で両 CPU の新規バイナリ導入・再実行・Codex／OpenCode の ACP 初期応答が成功しました。認証と Crew 経由の会話、実機 WSL 削除は未検証です。
 
 main の [Ubuntu 統合 CI 41261172219](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41261172219) は agents 工程の SHA256 不一致で停止しました。Kiro CLI 2.34.0 の両 CPU 用 ZIP の実ハッシュ、OpenCode 1.19.4／Codex 0.164.0 の GitHub リリース digest は記録と一致しました。一方、可変 URL `https://download.crew.kiro.dev/cli.sh` の内容が変わり、記録の `99e69080…` に対して取得物は `9111584c…` でした。今回からインストーラー自体も採用リリースの完全なコミット URL と SHA256 で固定し、ハッシュ不一致には対象ファイル名を表示します。ハッシュ検証は維持します。
+
+CI では既存の共有 pipx 領域 `/opt/pipx` を継承すると AppArmor の権限検査に失敗したため、Crew 用の pipx ホームと公開バイナリ先を指定ユーザーの領域に固定しました。最小 Ubuntu でも Node の展開と専用 AppArmor プロファイルを利用できるよう `xz-utils` と `apparmor` を前提パッケージへ明示しました。

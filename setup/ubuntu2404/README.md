@@ -12,7 +12,7 @@ bash setup/ubuntu2404/crew-start.sh
 bash setup/ubuntu2404/crew-stop.sh
 ```
 
-`setup.sh` は Docker Engine／CLI・Compose・Buildx、Kiro CLI、Crew、OpenCode、Codex CLI を導入し、既存の `scripts/build-image.sh` と `scripts/smoke-test.sh` を実行します。後処理 Python と ParaView は CFD イメージ内にあります。個人認証と Crew の起動は自動では行いません。Ubuntu の userns 制限がある場合は、Crew の専用 AppArmor プロファイルを公式コマンドで導入します。Codex 用の `@agentclientprotocol/codex-acp` 2.5.0 と Node.js 24.11.1 も、ユーザー専用領域へ導入します。Node は公式バイナリ、npm 依存は lockfile と integrity で固定し、インストールスクリプトを実行しません。既存の Node を置き換えず、専用ランチャーだけが固定 Node を使用します。
+`setup.sh` は Docker Engine／CLI・Compose・Buildx、Kiro CLI、Crew、OpenCode、Codex CLI を導入し、既存の `scripts/build-image.sh` と `scripts/smoke-test.sh` を実行します。後処理 Python と ParaView は CFD イメージ内にあります。個人認証と Crew の起動は自動では行いません。Ubuntu の userns 制限がある場合は、Crew の専用 AppArmor プロファイルを公式コマンドで導入します。Codex 用の `@agentclientprotocol/codex-acp` 2.5.0 と Node.js 24.11.1 も、ユーザー専用領域へ導入します。Node は公式バイナリ、npm 依存は lockfile と integrity で固定し、インストールスクリプトを実行しません。pipx がある場合も Crew の導入先を `~/.local/share/opencae/pipx` に固定します。既存の Node を置き換えず、専用ランチャーだけが固定 Node を使用します。
 
 ホスト用ツールは公式 apt パッケージ／事前ビルド済みバイナリ／wheel を使用し、ソースビルドへ自動フォールバックしません。Kiro CLI 2.34.0、Crew 0.11.1、OpenCode 1.19.5、Codex CLI 0.166.0 を固定しました。OpenCode amd64 は AVX2 前提を避ける baseline 版、Codex は公式 musl 版です。版・URL・SHA256 は `setup/config/agents.env`、Docker は `setup/config/docker.env` にあります。Crew のインストーラー自体もリリースのコミット URL と SHA256 で固定します。ハッシュ検証した公式インストーラーで指定版の署名付きマニフェストを検証し、依存も wheel のみ導入します。
 
