@@ -34,7 +34,7 @@ require_engine() {
         expected_endpoint="unix://$HOME/.colima/opencae-workshop2026/docker.sock"
     fi
     endpoint="${DOCKER_HOST:-$(docker context inspect --format '{{.Endpoints.docker.Host}}')}"
-    [[ "$endpoint" == "$expected_endpoint" ]] || fail "接続先が標準構成ではありません: $endpoint。各 OS の導入手順を確認してください。"
+    [[ "$endpoint" == "$expected_endpoint" ]] || fail "接続先が標準構成ではありません: ${endpoint}。各 OS の導入手順を確認してください。"
     info="$(docker info --format '{{.OperatingSystem}}|{{.OSType}}|{{.Architecture}}')" || fail 'WSL 内の Docker Engine へ接続できません。サービスとグループ反映を確認してください。'
     [[ "$(printf '%s' "$info" | tr '[:upper:]' '[:lower:]')" != *desktop* && "$info" == *'|linux|'* ]] || fail 'Docker Desktop は対象外です。WSL / Colima 内の Linux Docker Engine を使用してください。'
     server_arch="${info##*|}"
