@@ -228,7 +228,7 @@ macOS の CLI は `~/.local/share/opencae/macos` に分離し、固定 URL・SHA
 
 専用 Docker context `colima-opencae-workshop2026` を各コマンドと Crew に渡し、他用途の既定 context は切り替えない。Crew は専用 launchd job とし、Terminal を閉じても継続する。plist はログイン時の自動起動領域に置かず、Stop は対象 job だけを登録解除する。VM と計算コンテナは停止しない。保存設定を照合して同じ工程を再開可能にする。
 
-標準 macOS CI はホストバイナリ導入・ACP・制御を確認し、ネストした VZ を必要とする Colima と CFD の通し確認は Apple Silicon 実機に分ける。Proxy 自動設定は macOS では対象外とする。 hello-world／SSH／Nginxの専用検証は追加せず、セットアップでOpenFOAMの共通スモークを自動実行し、Composeの実行・削除、計算、MPI、描画、動画、共有フォルダーの永続化・権限を確認する。コンテナのHTTPポート転送は今回のCFD利用経路に含まれない。詳細は [macOS 手順](docs/macos.md) とテスト計画に記録する。
+標準 macOS CI はホストバイナリ導入・ACP・制御を確認する。Colimaの実VMとコンテナ・ファイル共有の境界はQEMU／TCG＋9pで追加検証し、製品構成のVZ／virtiofsとCFDの通し確認はApple Silicon実機に分ける。Proxy 自動設定は macOS では対象外とする。 hello-world／SSH／Nginxの専用検証は追加せず、セットアップでOpenFOAMの共通スモークを自動実行し、Composeの実行・削除、計算、MPI、描画、動画、共有フォルダーの永続化・権限を確認する。コンテナのHTTPポート転送は今回のCFD利用経路に含まれない。詳細は [macOS 手順](docs/macos.md) とテスト計画に記録する。
 
 ## 7. 環境構築の完了条件
 
@@ -250,7 +250,7 @@ macOS の CLI は `~/.local/share/opencae/macos` に分離し、固定 URL・SHA
 
 スクリプト別の受け入れ条件は [セットアップテスト計画](docs/setup-test-plan.md) に定める。PowerShell の入力・設定・コマンド制御と Bash の処理を自動テストし、Ubuntu 24.04 ARM64／amd64 で導入・計算処理を検証する。長い CFD ビルドは統合検証として分離する。
 
-WSL 用 Actions は利用可能だが、GitHub ホスト型ランナーのネストした仮想化は正式サポートされていない。標準 Windows CI の成功を WSL2 の検証成功とみなさない。WSL2＋systemd＋Docker の新規作成・再開・起動停止は、能力確認済みの Windows 実機または専用セルフホスト型ランナーで確認する。WSL1 は代替の合格条件にしない。
+Windows x64のホスト型CIで実WSL2 Ubuntu 24.04を起動し、PowerShell 5.1／7の引数転送・日本語パス・終了コード・プロジェクト配置を確認する。WSL1は代替の合格条件にしない。製品のrootfsインポート、WSL2＋systemd＋Docker＋Crewの通し構築とARM64上の実WSL2は、この境界テストの合格範囲に含めない。個人認証や対話操作も実機受け入れで確認する。起動条件・重複排除は [CI構成](docs/ci.md) に従う。
 
 個人認証、既定ブラウザー、CMD のダブルクリック操作、Windows 再起動後の復帰、Crew の会話と動画再生は ARM64／x64 の手動受け入れに含める。テスト ID・対象 CPU・実行環境・結果を記録し、モックの成功や未実施を実機成功として扱わない。Proxy プレビューは別途記録する。Ubuntu 24.04 の Bash コアとモックによる制御テストを実装した。Docker の新規導入と CFD ビルド・確認を伴う統合テストは使い捨て ARM64／amd64 のネイティブ CI で実行し、開発用 WSL では実行しない。同版配布を利用し、CPU に対応する URL・ハッシュ・展開名を選択する。CI は対象 CPU を選択可能とし、統合実行の成否は CPU ごとに別記録とする。Windows 側スクリプトを実装し、制御テストと実機受け入れを分けて確認する。
 
@@ -303,7 +303,7 @@ opencae-workshop2026-env/
 | 項目 | 方針 |
 | --- | --- |
 | 既定ブランチ | 公開時は main とする |
-| 作業ブランチ | codex/<作業内容> などの短期間のブランチを使い、確認後に main へ反映 |
+| 作業ブランチ | developから短期間の作業ブランチを作成し、PRでdevelop、続いてPRでmainへ反映。リリース後はdevelopをmainに揃える |
 | 環境のリリース | Git タグ v0.1.0、v0.2.0 などでセットアップ処理と資料を固定 |
 | ローカルイメージのタグ | of2606-r1、of2606-r2 などでビルド設定のリリースを識別 |
 | リリース間の対応 | 各 Git タグの versions.env に、各ソフトの版・取得元・ベースイメージ・チェックサムを記録。ローカル構築結果にはイメージ ID を記録 |

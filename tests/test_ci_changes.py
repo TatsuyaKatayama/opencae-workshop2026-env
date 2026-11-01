@@ -33,3 +33,13 @@ class CoverageTests(unittest.TestCase):
     def test_dispatcher_change_and_manual_run_select_every_boundary(self):
         self.assertTrue(all(changes.select(['.github/workflows/ci.yml']).values()))
         self.assertTrue(all(changes.select([], full=True).values()))
+
+    def test_homebrew_pin_does_not_install_windows_or_linux(self):
+        result = changes.select(['setup/config/homebrew.env'])
+        self.assertTrue(result['macos'])
+        self.assertFalse(result['windows'] or result['wsl'] or result['backends'] or result['setup'])
+
+    def test_wsl_rootfs_pin_does_not_install_mac_or_linux(self):
+        result = changes.select(['setup/config/wsl.json'])
+        self.assertTrue(result['windows'] and result['wsl'])
+        self.assertFalse(result['macos'] or result['backends'] or result['setup'])

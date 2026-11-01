@@ -1,6 +1,6 @@
 # セットアップスクリプトのテスト計画
 
-更新日：2026-11-01。Ubuntu 24.04 の Bash スクリプト、制御テスト、ARM64／amd64 統合 CI を実装済み。Windows 用スクリプトとモックによる制御テストも実装済み。この文書の全項目が通過したという意味ではなく、実施結果は docs/validation.md と CI に記録する。
+更新日：2026-11-02。Ubuntu 24.04 の Bash スクリプト、制御テスト、ARM64／amd64 統合 CI を実装済み。Windows 用スクリプトとモックによる制御テストも実装済み。この文書の全項目が通過したという意味ではなく、実施結果は docs/validation.md と CI に記録する。
 
 ## 検証の分担
 
@@ -11,9 +11,9 @@
 | WSL2 統合 | Windows ARM64／x64 の実機、または WSL2 対応セルフホスト型ランナー | 専用 Ubuntu の新規作成、配置、ユーザー、systemd、Docker、起動・停止、再開 |
 | 手動 | Windows ARM64／x64 | 個人認証、既定ブラウザー、CMD 起動操作、再起動後の復帰、Crew 会話・動画再生 |
 
-Canonical は WSL の導入・rootfs 取得・Bash 実行用 Actions を提供している。ただし Actions の存在は GitHub ホスト型ランナー上の WSL2 動作保証を意味しない。GitHub はネストした仮想化を正式サポートしていないため、標準 Windows ランナーだけで WSL2＋systemd＋Docker の全工程を保証しない。WSL1 の成功は代替の合格条件にしない。
+Windows x64のホスト型CIで実WSL2 Ubuntu 24.04の起動を確認し、PowerShell 5.1／7から製品ヘルパーへの引数・日本語パス・stdout／stderr・終了コードと、プロジェクト配置・LF正規化・秘密ファイル除外・再実行を検証する。WSL1やモックは実WSL2の合格として扱わない。環境情報の表示だけを目的としたジョブは追加しない。
 
-WSL2 CI はまずカーネル起動を含む能力確認を行い、対応環境を確定してから有効化する。非対応による未実施は成功と区別する。セルフホスト型の破壊的な新規作成検証は専用の検証機で手動起動し、本テストが作成した環境のみ後片付けする。個人認証情報を持つ通常の開発環境で、外部 PR のコードを実行しない。
+製品のrootfsインポート、systemd＋Docker＋Crewの通し構築、ARM64の実WSL2、対話操作は上表の統合・手動受け入れに残す。セルフホスト型の破壊的な新規作成検証は専用機で手動起動し、本テストが作成した環境のみ後片付けする。個人認証情報を持つ開発環境で外部PRのコードを実行しない。CIのイベントと分担は [CI構成](ci.md) を参照。
 
 ## スクリプト別の項目
 
@@ -90,8 +90,8 @@ Windows ARM64／x64 それぞれで、配布取得 → Setup → Windows 再起�
 | MAC-01 | setup.sh | Apple Silicon・macOS 15+・通常ユーザー、数値・未知引数、--planで変更や通信なし | 標準 Bash 構文・制御CI／実機 |
 | MAC-02 | 導入 | 公式 macOS バイナリの版・SHA256、Kiro署名、Crew wheelのみ、既存CLIの非上書き | macOSバイナリCI |
 | MAC-03 | 再実行 | 同設定で再開、異なる設定は拒否、成功状態と選択バックエンドを保持 | 制御CI・再導入CI |
-| MAC-04 | Colima | 同名の管理外profile拒否、VZ・aarch64・virtiofs・書き込みマウント、既定context非変更 | 制御CI／VMは実機 |
-| MAC-05 | Docker入口 | 専用socket・context・CPU照合、Desktop／リモート／設定領域上書きを拒否 | 制御CI |
+| MAC-04 | Colima | 同名の管理外profile拒否、VZ・aarch64・virtiofs・書き込みマウント、既定context非変更 | 制御CI／実VMのDocker・共有境界はQEMU CI／VZ・virtiofsは実機 |
+| MAC-05 | Docker入口 | 専用socket・context・CPU照合、Desktop／リモート／設定領域上書きを拒否 | 制御CI＋実Colima接続CI |
 | MAC-06 | 認証 | 状態確認で変更なし、未認証は対話限定、Codex既認証ならKiro不要、OpenCode選択 | 制御CI・未認証CI／認証は実機 |
 | MAC-07 | ブラウザー | 許可した認証URL、localhost・正しいportのCrew URL、シェル評価なし | 制御CI／既定ブラウザーは実機 |
 | MAC-08 | launchd | 専用label・argv・PATH・context・ログ権限、ログイン自動起動なし、重複起動回避、起動timeout | 制御CI・実launchd＋ダミーHTTPのCI／Crew本体は実機 |
@@ -99,7 +99,7 @@ Windows ARM64／x64 それぞれで、配布取得 → Setup → Windows 再起�
 | MAC-10 | CFD | 共通ケースの直列・MPI・CPU描画・動画・再作成後の保持・MacのUID/GID書き込み | Linux両CPU CI／Colima経由は実機 |
 | MAC-11 | 利用操作 | Finderの.command起動、空白・日本語パス、Terminal終了後の継続、Stop直後再起動、再ログイン | 実機 |
 
-macOS標準CIはVZのネストした仮想化を要求しない。`--agents-only` でホストCLI・Crew・ACPを実導入し、ColimaとCFDは構築しない。Mac実機の成功をモックCIで代替しない。Intel Mac・Proxy自動設定は今回の対象外。
+macOS標準CIはVZのネストした仮想化を要求しない。ホストジョブは `--agents-only` でCLI・Crew・ACPを実導入する。別の境界ジョブではQEMU／TCG＋9pの実Colima VMを起動し、製品のDocker接続チェックとUbuntuコンテナでの双方向共有・UID・永続化・終了コードを確認する。CFD全体はLinux両CPUで検証する。Mac実機の成功をモックCIで代替しない。Intel Mac・Proxy自動設定は今回の対象外。
 
 ARM64 ParaViewの取得方式を変更したため、コンテナのCIでは `vtkOSOpenGLRenderWindow` と llvmpipe、OpenFOAMReader、一般後処理venvとの分離、ffmpeg、MPIも再確認する。ロックはconda-forge URLと全依存SHA256を固定し、開発用WSLでは導入・ビルドしない。
 

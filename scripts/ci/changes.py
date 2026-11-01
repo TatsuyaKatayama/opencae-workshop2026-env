@@ -12,9 +12,9 @@ def select(paths, *, full=False):
         # Workflow edits must exercise the edited workflow, including the dispatcher.
         common = path in ('.github/workflows/ci.yml', 'scripts/ci/changes.py')
         workflow = lambda name: path == f'.github/workflows/{name}.yml'
-        linux = path.startswith(('setup/ubuntu2404/', 'setup/config/'))
-        windows = path.startswith(('setup/windows/', 'tests/windows'))
-        macos = path.startswith(('setup/macos/', 'tests/test_macos', 'tests/test_homebrew', 'tests/test_commands'))
+        linux = path.startswith(('setup/ubuntu2404/', 'setup/config/codex-acp/')) or path in ('setup/config/agents.env', 'setup/config/docker.env')
+        windows = path.startswith(('setup/windows/', 'tests/windows')) or path == 'setup/config/wsl.json'
+        macos = path.startswith(('setup/macos/', 'tests/test_macos', 'tests/test_homebrew', 'tests/test_commands')) or path in ('setup/config/homebrew.env', 'setup/config/macos.env')
         shared = path.startswith(('scripts/lib/', 'compose/')) or path == 'versions.env'
         ci_vm = path.startswith('scripts/ci/macos-')
         result['windows'] |= common or windows or linux or workflow('windows')
