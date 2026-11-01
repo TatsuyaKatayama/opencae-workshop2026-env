@@ -7,6 +7,8 @@ param(
 )
 try {
     . "$PSScriptRoot/Common.ps1"
+    $adjacent = Join-Path $PSScriptRoot '../environment.json'
+    if (!$ConfigPath -and (Test-Path -LiteralPath $adjacent -PathType Leaf)) { $ConfigPath = $adjacent }
     if (!$InstallLocation -and !$ConfigPath) {
         $registration = Get-WslRegistration $DistroName
         if ($registration) { $InstallLocation = $registration.BasePath -replace '^\\\\\?\\', '' }
@@ -23,7 +25,7 @@ try {
     Sync-CrewRuntime $PSScriptRoot $config
     Install-EnvironmentLaunchers $PSScriptRoot $config
     Write-Host "Windows launchers updated: $($config.installLocation)"
-    Write-Host 'Run Start Backend.cmd, then Start Kiro Crew.cmd. Old desktop shortcuts can be deleted manually.'
+    Write-Host 'Run 1_StartBackend.cmd, then 2_StartCrew.cmd. Old desktop shortcuts can be deleted manually.'
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
     exit 1

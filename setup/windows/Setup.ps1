@@ -156,7 +156,7 @@ param(
     if (Test-Path -LiteralPath $pending) { Remove-Item -LiteralPath $pending }
     $pendingDirectory = Split-Path -Parent $pending
     if ((Test-Path -LiteralPath $pendingDirectory) -and @(Get-ChildItem -LiteralPath $pendingDirectory -Force).Count -eq 0) { Remove-Item -LiteralPath $pendingDirectory }
-    Write-Host "セットアップ完了。$InstallLocation の Start Backend.cmd → Start Kiro Crew.cmd の順に実行してください。終了時は Stop Kiro Crew.cmd を使用してください。"
+    Write-Host "セットアップ完了。$InstallLocation の 1_StartBackend.cmd → 2_StartCrew.cmd の順に実行してください。終了時は 3_StopCrew.cmd を使用してください。"
 
 }
 

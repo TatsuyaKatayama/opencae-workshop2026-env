@@ -244,10 +244,18 @@ function Find-EnvironmentConfig {
     return $found[0].Path
 }
 
+function Get-WindowsScriptFiles {
+    @('Common.ps1','KiroLogin.ps1','StartBackend.ps1','StartCrew.ps1','StopCrew.ps1','RemoveEnvironment.ps1','UpdateLaunchers.ps1')
+}
+
+function Get-LegacyLauncherFiles {
+    @(Get-WindowsScriptFiles) + @('Start Backend.cmd','Start Kiro Crew.cmd','Stop Kiro Crew.cmd','runtime/crew-start.sh','runtime/crew-keepalive.sh')
+}
+
 function Get-InstalledLauncherFiles {
-    @('Common.ps1','KiroLogin.ps1','StartBackend.ps1','StartCrew.ps1','StopCrew.ps1','RemoveEnvironment.ps1','UpdateLaunchers.ps1',
-      'Start Backend.cmd','Start Kiro Crew.cmd','Stop Kiro Crew.cmd',
-      'runtime/crew-start.sh','runtime/crew-keepalive.sh')
+    @((Get-WindowsScriptFiles | ForEach-Object { 'scripts/' + $_ })) +
+        @('1_StartBackend.cmd','2_StartCrew.cmd','3_StopCrew.cmd','9_Allclean.cmd',
+          'scripts/runtime/crew-start.sh','scripts/runtime/crew-keepalive.sh')
 }
 
 function Get-CrewRuntimeSource {
@@ -286,30 +294,50 @@ function Install-EnvironmentLaunchers {
         $previous = Read-Environment $configPath
         if ($previous.environmentId -ne $Config.environmentId) { throw 'Installation directory belongs to another environment.' }
     }
-    $files = @(Get-InstalledLauncherFiles | Where-Object { $_ -like '*.ps1' })
+    $files = @(Get-WindowsScriptFiles)
     foreach ($file in $files) {
         if (!(Test-Path -LiteralPath (Join-Path $SourceDirectory $file) -PathType Leaf)) { throw "Source script is missing: $file" }
     }
     $runtimeSource = Get-CrewRuntimeSource $SourceDirectory
     Save-Environment $configPath $Config
+    $scriptTarget = Join-Path $directory 'scripts'
+    if ((Test-Path -LiteralPath $scriptTarget) -and ((Get-Item -LiteralPath $scriptTarget -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Script directory must not be a link or junction.' }
+    foreach ($path in @((Join-Path $scriptTarget 'runtime'),(Join-Path $directory 'runtime'))) {
+        if ((Test-Path -LiteralPath $path) -and ((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Runtime directory must not be a link or junction.' }
+    }
+    [void][IO.Directory]::CreateDirectory($scriptTarget)
     foreach ($file in $files) {
         $source = (Resolve-Path -LiteralPath (Join-Path $SourceDirectory $file)).ProviderPath
-        $target = Join-Path $directory $file
+        $target = Join-Path $scriptTarget $file
         if ([IO.Path]::GetFullPath($source) -ine [IO.Path]::GetFullPath($target)) { Copy-Item -LiteralPath $source -Destination $target -Force }
     }
-    $runtimeTarget = Join-Path $directory 'runtime'
+    $runtimeTarget = Join-Path $scriptTarget 'runtime'
     [void][IO.Directory]::CreateDirectory($runtimeTarget)
     foreach ($name in @('crew-start.sh','crew-keepalive.sh')) {
         $source = Join-Path $runtimeSource $name
         $target = Join-Path $runtimeTarget $name
         if ([IO.Path]::GetFullPath($source) -ine [IO.Path]::GetFullPath($target)) { Copy-Item -LiteralPath $source -Destination $target -Force }
     }
-    foreach ($entry in @(@('Start Backend.cmd','StartBackend.ps1'),@('Start Kiro Crew.cmd','StartCrew.ps1'),@('Stop Kiro Crew.cmd','StopCrew.ps1'))) {
-        $lines = @('@echo off','setlocal DisableDelayedExpansion',
-            ('"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%~dp0' + $entry[1] + '" -ConfigPath "%~dp0environment.json"'),
-            'set "opencae_launcher_status=%errorlevel%"','echo.','pause','exit /b %opencae_launcher_status%')
+    foreach ($entry in @(@('1_StartBackend.cmd','StartBackend.ps1'),@('2_StartCrew.cmd','StartCrew.ps1'),@('3_StopCrew.cmd','StopCrew.ps1'),@('9_Allclean.cmd','RemoveEnvironment.ps1'))) {
+        $invocation = '"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\' + $entry[1] + '" -ConfigPath "%~dp0environment.json"'
+        if ($entry[0] -eq '9_Allclean.cmd') {
+            # 自分の CMD が削除されても後続行を読み直さない。PS は結果表示のため残す。
+            $invocation = $invocation.Replace('-NoProfile ', '-NoProfile -NoExit ').Replace('%~dp0', '%opencae_install_dir%') + ' -InteractiveConfirmation'
+            $lines = @('@echo off','setlocal DisableDelayedExpansion','set "opencae_install_dir=%~dp0"','cd /d "%SystemRoot%"',('(' + $invocation + ') & exit /b'))
+        } else {
+            $lines = @('@echo off','setlocal DisableDelayedExpansion',$invocation,
+                'set "opencae_launcher_status=%errorlevel%"','echo.','pause','exit /b %opencae_launcher_status%')
+        }
         [IO.File]::WriteAllText((Join-Path $directory $entry[0]),(($lines -join "`r`n")+"`r`n"),[Text.Encoding]::ASCII)
     }
+    # 新しい配置を作成した後に、旧レイアウトの既知ファイルだけを整理する。
+    foreach ($file in (Get-LegacyLauncherFiles)) {
+        $path = Join-Path $directory $file
+        if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path -Force }
+    }
+    $oldRuntime = Join-Path $directory 'runtime'
+    if ((Test-Path -LiteralPath $oldRuntime) -and @(Get-ChildItem -LiteralPath $oldRuntime -Force).Count -eq 0) { Remove-Item -LiteralPath $oldRuntime }
+
 }
 
 function Get-WindowsCpu {

@@ -205,8 +205,18 @@ try {
         $script:removalRegistration=$null
         Must-Fail { Remove-WorkshopEnvironment -ConfigPath $file -Confirm:$false }
         $script:removalRegistration=[pscustomobject]@{Id='owned-id';BasePath=$root;Version=2}
+        & {
+            function Read-Host { param($Prompt) return '' }
+            $text=Remove-WorkshopEnvironment -ConfigPath $file -InteractiveConfirmation -Confirm:$false 6>&1 | Out-String
+            Check ($text.Contains('wsl --unregister remove-test') -and $text.Contains('元に戻せません')) 'Allclean must show the exact action and irreversible data loss warning'
+            Check ((Read-Environment $file).phase -eq 'Ready') 'Cancelled Allclean must keep metadata unchanged'
+        }
+        Check (@($script:removalCalls | Where-Object { $_ -contains '--unregister' }).Count -eq 0) 'Cancelled Allclean must not unregister'
         $script:removalCode=23
-        Must-Fail { Remove-WorkshopEnvironment -ConfigPath $file -Confirm:$false }
+        & {
+            function Read-Host { param($Prompt) return 'DELETE' }
+            Must-Fail { Remove-WorkshopEnvironment -ConfigPath $file -InteractiveConfirmation -Confirm:$false }
+        }
         Check ((Read-Environment $file).phase -eq 'Removing') 'Removal failure must retain recovery metadata'
         # WSL 削除後のメタデータ処理失敗からも安全に再開できる。
         $script:removalRegistration=$null
@@ -311,27 +321,44 @@ if ($env:OS -eq 'Windows_NT') {
         $runtimeSource=Join-Path $launcherTemp 'ubuntu2404'
         [void][IO.Directory]::CreateDirectory($runtimeSource)
         foreach ($name in @('crew-start.sh','crew-keepalive.sh')) { [IO.File]::WriteAllText((Join-Path $runtimeSource $name),"#!/bin/sh`nexit 0`n") }
-        $dummy='param([string]$ConfigPath)' + "`n" + '[IO.File]::WriteAllText(($PSCommandPath + ''.ran''),$ConfigPath)' + "`nexit 0`n"
-        foreach ($name in (Get-InstalledLauncherFiles | Where-Object { $_ -like '*.ps1' })) {
+        $dummy=@'
+param([string]$ConfigPath,[switch]$InteractiveConfirmation)
+[IO.File]::WriteAllText(($PSCommandPath + '.ran'),$ConfigPath)
+if ((Split-Path -Leaf $PSCommandPath) -eq 'RemoveEnvironment.ps1') {
+    if (!$InteractiveConfirmation) { exit 91 }
+    # Allclean の CMD 自体が消えても、親 CMD が正常に終了することを確認。
+    Remove-Item -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) '9_Allclean.cmd')
+}
+exit 0
+'@
+        foreach ($name in (Get-WindowsScriptFiles)) {
             [IO.File]::WriteAllText((Join-Path $launcherSource $name),$dummy,(New-Object Text.UTF8Encoding($true)))
         }
+        [IO.File]::WriteAllText((Join-Path $launcherInstall 'Common.ps1'),'old layout')
+        [IO.File]::WriteAllText((Join-Path $launcherInstall 'Start Backend.cmd'),'old layout')
+        [IO.File]::WriteAllText((Join-Path $launcherInstall 'user-data.txt'),'keep')
         Install-EnvironmentLaunchers $launcherSource $launcherConfig
+        Check (!(Test-Path -LiteralPath (Join-Path $launcherInstall 'Common.ps1'))) 'Old root PS1 must be removed after migration'
+        Check (!(Test-Path -LiteralPath (Join-Path $launcherInstall 'Start Backend.cmd'))) 'Old CMD name must be removed after migration'
+        Check (Test-Path -LiteralPath (Join-Path $launcherInstall 'user-data.txt')) 'Unrelated files must survive layout migration'
+        Check (Test-Path -LiteralPath (Join-Path $launcherInstall 'scripts/RemoveEnvironment.ps1')) 'Removal script must be in the script directory'
+
         $record=Join-Path $launcherInstall 'environment.json'
-        Check (Test-Path -LiteralPath (Join-Path $launcherInstall 'runtime/crew-keepalive.sh')) 'Runtime update payload must be staged'
+        Check (Test-Path -LiteralPath (Join-Path $launcherInstall 'scripts/runtime/crew-keepalive.sh')) 'Runtime update payload must be staged'
         Check ((Read-Environment $record).environmentId -eq $launcherConfig.environmentId) 'Installed record identity changed'
         $commands=@(Get-ChildItem -LiteralPath $launcherInstall -Filter '*.cmd')
-        Check ($commands.Count -eq 3) 'Three CMD launchers must be installed'
-        $cases=@($commands) + @($commands | Where-Object { $_.Name -eq 'Start Backend.cmd' })
+        Check ($commands.Count -eq 4) 'Four numbered CMD launchers must be installed'
+        $cases=@($commands) + @($commands | Where-Object { $_.Name -eq '1_StartBackend.cmd' })
         $caseIndex=0
         foreach ($command in $cases) {
             $expectedExit=0
-            if ($caseIndex -eq 3) {
+            if ($caseIndex -eq 4) {
                 $expectedExit=23
-                [IO.File]::WriteAllText((Join-Path $launcherInstall 'StartBackend.ps1'),"exit 23`n")
+                [IO.File]::WriteAllText((Join-Path $launcherInstall 'scripts/StartBackend.ps1'),"exit 23`n")
             }
             $caseIndex++
             $bytes=[IO.File]::ReadAllBytes($command.FullName)
-            Check ([Text.Encoding]::ASCII.GetString($bytes).Contains('%~dp0environment.json')) 'CMD must bind its adjacent environment record'
+            Check ([Text.Encoding]::ASCII.GetString($bytes).Contains('environment.json') -and [Text.Encoding]::ASCII.GetString($bytes).Contains('scripts\')) 'CMD must bind its adjacent environment record'
             $info=New-Object Diagnostics.ProcessStartInfo
             $info.FileName=Join-Path $env:SystemRoot 'System32\cmd.exe'
             $info.Arguments='/d /c ""' + $command.FullName + '""'
@@ -348,7 +375,7 @@ if ($env:OS -eq 'Windows_NT') {
             } finally { $process.Dispose() }
         }
         foreach ($name in @('StartBackend.ps1','StartCrew.ps1','StopCrew.ps1')) {
-            Check ([IO.File]::ReadAllText((Join-Path $launcherInstall ($name+'.ran'))) -eq $record) 'CMD must preserve the adjacent configuration path'
+            Check ([IO.File]::ReadAllText((Join-Path $launcherInstall ('scripts/'+$name+'.ran'))) -eq $record) 'CMD must preserve the adjacent configuration path'
         }
         $foreign=$launcherConfig | Select-Object *
         $foreign.environmentId=[guid]::NewGuid().ToString()
@@ -394,14 +421,14 @@ if ($env:OS -eq 'Windows_NT') {
         Check ($c.phase -eq 'Ready') 'Resumed setup did not complete'
         Check (@($script:setupCalls | Where-Object { $_ -contains '--import' }).Count -eq 1) 'Resume must not reimport'
         Check (@($script:setupCalls | Where-Object { ($_ -join ' ') -match 'stage-project.sh' }).Count -eq 1) 'Resume must not restage'
-        Check (Test-Path -LiteralPath (Join-Path $options.InstallLocation 'Start Backend.cmd')) 'CMD launcher not installed'
+        Check (Test-Path -LiteralPath (Join-Path $options.InstallLocation '1_StartBackend.cmd')) 'CMD launcher not installed'
         Check (@($script:setupCalls | Where-Object { $_ -contains 'normalize' }).Count -eq 2) 'Initial setup and resume must both normalize shared configuration'
         Check (@($script:setupCalls | Where-Object { $_ -contains 'compare' }).Count -eq 2) 'Version comparison must ignore line ending differences'
         $refreshes=@($script:setupCalls | Where-Object { $_ -contains 'install' -and $_[-1] -match '/scripts/smoke-test.sh$' })
         Check ($refreshes.Count -eq 2) 'Initial setup and resume must both refresh the validation script'
         Check ($refreshes[0][-2] -eq '/mnt/source with spaces/scripts/smoke-test.sh') 'Refresh must use the current Windows checkout'
         Check (@($script:setupCalls | Where-Object { $_ -contains 'cmp' -and $_[-1] -match '/scripts/smoke-test.sh$' }).Count -eq 2) 'Copied validation script must be verified'
-        Check (Test-Path (Join-Path $options.InstallLocation 'StartBackend.ps1')) 'Launchers were not copied'
+        Check (Test-Path (Join-Path $options.InstallLocation 'scripts/StartBackend.ps1')) 'Launchers were not copied'
         $bad=@{}; foreach ($k in $options.Keys) { $bad[$k]=$options[$k] }; $bad.Port=5481
         Must-Fail { Invoke-WorkshopSetup @bad }
         # 別の設定記録がない登録済み環境を流用しない。

@@ -3,7 +3,7 @@
 param([string]$ConfigPath, [switch]$PauseOnError)
 try {
     . "$PSScriptRoot/Common.ps1"
-    if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'environment.json' }
+    if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot '../environment.json' }
     Invoke-CrewAction -Action 'Start' -ConfigPath $ConfigPath
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red

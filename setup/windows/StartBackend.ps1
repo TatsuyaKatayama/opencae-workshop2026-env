@@ -8,7 +8,7 @@ param(
 )
 try {
     . "$PSScriptRoot/Common.ps1"
-    if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'environment.json' }
+    if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot '../environment.json' }
     if (!$Backend) {
         Write-Host 'Select backend: 1 = Kiro CLI, 2 = Codex, 3 = OpenCode'
         switch (Read-Host 'Backend [1-3]') {

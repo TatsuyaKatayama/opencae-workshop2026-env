@@ -1,11 +1,11 @@
 ﻿#requires -version 5.1
 [CmdletBinding(SupportsShouldProcess=$true,ConfirmImpact='High')]
-param([string]$ConfigPath)
+param([string]$ConfigPath,[switch]$InteractiveConfirmation)
 . "$PSScriptRoot/Common.ps1"
 
 function Remove-WorkshopEnvironment {
     [CmdletBinding(SupportsShouldProcess=$true,ConfirmImpact='High')]
-    param([Parameter(Mandatory=$true)][string]$ConfigPath)
+    param([Parameter(Mandatory=$true)][string]$ConfigPath,[switch]$InteractiveConfirmation)
     $config = Read-Environment $ConfigPath
     $directory = Split-Path -Parent ([IO.Path]::GetFullPath($ConfigPath))
     $installed = Join-Path $config.installLocation 'environment.json'
@@ -13,7 +13,7 @@ function Remove-WorkshopEnvironment {
     $legacy = Join-Path $env:LOCALAPPDATA "OpenCAE\environments\$($config.distroName)\environment.json"
     $allowed = @($installed,$pending,$legacy) | ForEach-Object { [IO.Path]::GetFullPath($_) }
     if ([IO.Path]::GetFullPath($ConfigPath) -notin $allowed) { throw 'Use the environment.json in the WSL installation directory or its recovery record.' }
-    foreach ($item in @($directory,(Join-Path $directory 'launchers'),$ConfigPath)) {
+    foreach ($item in @($directory,$config.installLocation,(Join-Path $directory 'launchers'),(Join-Path $config.installLocation 'scripts'),(Join-Path $config.installLocation 'scripts/runtime'),(Join-Path $config.installLocation 'runtime'),$ConfigPath)) {
         if ((Test-Path -LiteralPath $item) -and ((Get-Item -LiteralPath $item -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
             throw 'Environment metadata must not be a link or junction.'
         }
@@ -26,6 +26,18 @@ function Remove-WorkshopEnvironment {
         if ($marker.Output.Trim() -ne $config.environmentId) { throw 'Environment identity mismatch. Nothing was deleted.' }
     } elseif ($config.phase -ne 'Removing') { throw 'WSL registration is missing. Inspect the environment manually.' }
     $description = "Permanently delete WSL '$($config.distroName)' at '$($config.installLocation)', including all Linux files, credentials, CFD images and results, then remove its launcher metadata"
+    if ($InteractiveConfirmation -and !$WhatIfPreference) {
+        Write-Host ''
+        Write-Host '【警告】Allclean を実行します。' -ForegroundColor Yellow
+        Write-Host "実行内容: wsl --unregister $($config.distroName)"
+        Write-Host "保存先: $($config.installLocation)"
+        Write-Host 'WSL 内の全ファイル・認証情報・Docker イメージ・計算結果が削除されます。元に戻せません。' -ForegroundColor Red
+        Write-Host 'Windows 側の設定と起動スクリプトも削除します。他の WSL と取得元のリポジトリは保持します。'
+        $answer = Read-Host '本当にいいですか？ 削除する場合だけ DELETE と入力してください（Enter でキャンセル）'
+        if ($answer -cne 'DELETE') { Write-Host 'キャンセルしました。削除は行っていません。'; return }
+        # 明示入力で承認済み。ShouldProcess の WhatIf は引き続き尊重する。
+        $ConfirmPreference = 'None'
+    }
     if (!$PSCmdlet.ShouldProcess($config.distroName,$description)) { return }
     if ($registration) {
         # 確認ダイアログの待機中に登録先が変わっていないことを再確認する。
@@ -50,7 +62,7 @@ function Remove-WorkshopEnvironment {
     }
     # unregister が保存先を削除する場合にも対応し、既知のファイルだけを整理する。
     foreach ($base in @($directory,$config.installLocation,(Join-Path $directory 'launchers'))) {
-        foreach ($file in (Get-InstalledLauncherFiles)) {
+        foreach ($file in (@(Get-InstalledLauncherFiles) + @(Get-LegacyLauncherFiles))) {
             $path = Join-Path $base $file
             if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path -Force }
         }
@@ -58,7 +70,7 @@ function Remove-WorkshopEnvironment {
     foreach ($path in @($ConfigPath,$installed,$pending) | Select-Object -Unique) {
         if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path }
     }
-    foreach ($path in @((Join-Path $directory 'launchers'),(Join-Path $directory 'runtime'),(Join-Path $config.installLocation 'runtime'),(Split-Path -Parent $pending)) | Select-Object -Unique) {
+    foreach ($path in @((Join-Path $directory 'scripts/runtime'),(Join-Path $config.installLocation 'scripts/runtime'),(Join-Path $directory 'scripts'),(Join-Path $config.installLocation 'scripts'),(Join-Path $directory 'launchers'),(Join-Path $directory 'runtime'),(Join-Path $config.installLocation 'runtime'),(Split-Path -Parent $pending)) | Select-Object -Unique) {
         if ((Test-Path -LiteralPath $path) -and @(Get-ChildItem -LiteralPath $path -Force).Count -eq 0) { Remove-Item -LiteralPath $path }
     }
     Write-Host 'Environment removed. The Windows checkout and other WSL environments were kept.'
@@ -66,9 +78,13 @@ function Remove-WorkshopEnvironment {
 
 if ($MyInvocation.InvocationName -ne '.') {
     try {
-        if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'environment.json' }
+        if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot '../environment.json' }
         $PSBoundParameters['ConfigPath'] = $ConfigPath
         Remove-WorkshopEnvironment @PSBoundParameters
     }
-    catch { Write-Host $_.Exception.Message -ForegroundColor Red; exit 1 }
+    catch {
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        if ($InteractiveConfirmation) { [void](Read-Host 'Enter キーで閉じます') }
+        exit 1
+    }
 }

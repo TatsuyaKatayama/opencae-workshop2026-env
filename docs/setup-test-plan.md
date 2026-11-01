@@ -26,7 +26,7 @@ WSL2 CI はまずカーネル起動を含む能力確認を行い、対応環境
 | S05 | Setup.ps1 | 任意名・既定／指定保存先で Ubuntu 24.04／WSL2 を作成し、指定ユーザー・sudo・systemd を確認 | WSL2 |
 | S06 | Setup.ps1 | clone／ZIP から Linux ファイルシステムへ配置。元の配布ディレクトリを移動しても起動可能 | WSL2＋手動 |
 | S07 | Setup.ps1 | 作成記録が一致する未完了環境のみ再開。記録不整合や他環境を再利用しない | 自動＋WSL2 |
-| S08 | Setup.ps1 | インストール先への設定保存と3 CMD 配置。ConfigPath、対象環境・ユーザー・プロジェクトパスが一致 | 自動＋手動 |
+| S08 | Setup.ps1 | インストール先への設定保存と4 CMD 配置。ConfigPath、対象環境・ユーザー・プロジェクトパスが一致 | 自動＋手動 |
 | L01 | setup.sh | Ubuntu 24.04、ARM64／amd64 を判定し、対象外 OS／CPU を拒否 | 自動＋Linux |
 | L02 | setup.sh | Docker Engine／CLI・Compose・Buildx、Kiro CLI・Crew・OpenCode・Codex CLI の指定版を導入 | Linux＋WSL2 |
 | L03 | setup.sh | システム操作の権限と、CLI・Crew・作業ファイルの指定ユーザー所有を確認 | Linux＋WSL2 |
@@ -53,11 +53,14 @@ WSL2 CI はまずカーネル起動を含む能力確認を行い、対応環境
 | R03 | RemoveEnvironment.ps1 | 対象のみ unregister。対応する起動ファイルと既知メタデータを削除し、他環境・Windows 配布元・未知ファイルを保持。途中再開も確認 | 自動＋WSL2 |
 
 | U01 | UpdateLaunchers.ps1 | AppData／MSIX の旧記録から保存先へ移行。同じ登録 ID・保存先・識別記録の確認後に配置し、別環境や曖昧な記録を拒否 | 自動＋WSL2 |
-| U02 | CMD 起動ファイル | 空白・日本語を含む保存先、別の現在位置から3 CMD を実行し、同じフォルダーの設定を渡して終了コードを保持 | Windows CI＋手動 |
+| U02 | CMD 起動ファイル | 空白・日本語を含む保存先、別の現在位置から4 CMD を実行し、同じフォルダーの設定を渡して終了コードを保持 | Windows CI＋手動 |
 | S09 | Setup.ps1 | インポート前の記録は保存先の外へ置き、インポート成功後に保存先へ移す。途中再開で登録済みディスクを再インポートしない | 自動＋WSL2 |
 
 | C06 | Crew 稼働維持 | Windows が選択した WSL・ユーザーで非表示の維持プロセスを起動。重複せず、HTTP の一時不調に左右されず、サービス停止で終了 | 自動＋WSL2 |
 | C07 | Crew 再起動 | 実 TCP の TIME_WAIT でも起動前確認を通過し、実際の LISTEN ソケットは拒否。Stop → Start を連続実行 | 自動＋WSL2 |
+
+| R04 | 9_Allclean.cmd | 日本語で対象・登録解除コマンド・データ消失を警告し、DELETE 入力時だけ実行。空入力・その他・WhatIf で削除しない。自分の CMD が消えても終了できる | 自動＋Windows CI＋手動 |
+| U03 | 配置変更 | PS1 と runtime は scripts 配下、CMD は番号付き4本。旧管理ファイルだけを整理し、無関係なファイルを保持する | 自動 |
 
 ## 横断項目
 

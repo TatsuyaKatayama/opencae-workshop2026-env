@@ -111,3 +111,8 @@ CI では既存の共有 pipx 領域 `/opt/pipx` を継承すると AppArmor の
 利用者の実機検証で、Codex 認証後のチャット送信時に Crew がオフラインとなり、systemd サービスだけでは WSL の稼働を維持できないことが報告されました。Windows 側に用意された暫定修正を取り込み、稼働維持を専用 Bash へ分離しました。通常の wsl.exe を Crew のサービスが稼働する間だけ非表示で維持し、HTTP 応答ではなくサービス状態を監視します。起動・停止用と別のロックで重複を防ぎ、サービス停止で終了します。
 
 起動前のポート確認に SO_REUSEADDR を適用し、HTTP サーバーと同様に TCP TIME_WAIT を許容します。実際の localhost ソケットを使う回帰テストで、LISTEN 中は拒否し、停止後の TIME_WAIT では通過することを確認しました。開発用 WSL ではインストールや CFD ビルドを行っていません。Python 38件、Linux 上の PowerShell 99項目が通過しました。WSL の実際のアイドル終了抑止とチャット継続は実機で再確認します。
+
+
+## 起動ファイルの整理と Allclean（2026-11-01）
+
+インストール先の PS1 と runtime を scripts 配下へ移し、直下の CMD を 1_StartBackend／2_StartCrew／3_StopCrew／9_Allclean に整理しました。更新時は旧レイアウトの既知ファイルだけを削除し、無関係な Windows ファイルは保持します。Allclean は登録 ID・保存先・Linux 識別記録を照合後、日本語で登録解除コマンドとデータ消失を表示し、DELETE 入力時だけ削除へ進みます。キャンセル・WhatIf は削除しません。実際の WSL 削除は開発機では行わず、モックで確認します。Windows CI ではテスト用 PS1 で CMD の実行・引数・終了コード、および Allclean の CMD 自体が消えるケースを確認します。

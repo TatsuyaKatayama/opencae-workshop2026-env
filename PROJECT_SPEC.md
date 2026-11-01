@@ -154,7 +154,7 @@ Docker Engine、Linux 版 Docker CLI、Compose、Buildx は WSL 内に配置す�
 | --- | --- |
 | 事前 | Setup.ps1 で専用の WSL2 Ubuntu 24.04 を新規作成し、Linux ユーザー、systemd、Docker Engine／CLI・Compose・Buildx、Kiro CLI・Crew・OpenCode・Codex CLI を導入・設定 |
 | 事前 | 配布ファイルを WSL の Linux ファイルシステムへ配置し、既存 Dockerfile からネイティブ CPU 用の CFD イメージをローカルビルドして確認 |
-| 事前 | Windows 側の設定・起動スクリプトを保存し、WSL 保存先に3つの CMD 起動スクリプトを配置 |
+| 事前 | Windows 側の設定・起動スクリプトを保存し、WSL 保存先に4つの CMD 起動スクリプトを配置 |
 | 当日 | **Start Backend** を起動し、Windows のブラウザーで個人認証 |
 | 当日 | **Start Kiro Crew** を起動し、Windows のブラウザーから利用 |
 | 終了時 | **Stop Kiro Crew** を起動 |
@@ -186,15 +186,16 @@ Docker Engine、Linux 版 Docker CLI、Compose、Buildx は WSL 内に配置す�
 
 ### 5.5 Windows 設定・起動ファイル
 
-WSL の **InstallLocation** に環境ごとの `environment.json`、PowerShell スクリプト、3つの CMD 起動スクリプトを置く。AppData とデスクトップのショートカットには依存しない。元の clone／ZIP 解凍ディレクトリを移動しても起動できるようにする。
+WSL の **InstallLocation** に環境ごとの `environment.json`、4つの CMD 起動スクリプトを置き、PowerShell と runtime は scripts フォルダーへまとめる。AppData とデスクトップのショートカットには依存しない。元の clone／ZIP 解凍ディレクトリを移動しても起動できるようにする。
 
-設定には WSL 登録名、Linux ユーザー名、WSL 内のプロジェクト絶対パス、Crew のポート、作成・セットアップ状態を記録する。登録名の受け渡しにグローバルな環境変数は使用しない。CMD は `%~dp0` で同じフォルダーの PS1 と設定を指定する。PS1 を直接実行した場合も、設定指定を省略すると同じフォルダーの environment.json を使う。
+設定には WSL 登録名、Linux ユーザー名、WSL 内のプロジェクト絶対パス、Crew のポート、作成・セットアップ状態を記録する。登録名の受け渡しにグローバルな環境変数は使用しない。CMD は `%~dp0` でscripts フォルダーの PS1 と直下の設定を指定する。PS1 を直接実行した場合も、設定指定を省略すると親フォルダーの environment.json を使う。
 
 | 起動スクリプト | Windows 側 | Ubuntu 側 |
 | --- | --- | --- |
-| Start Backend.cmd | StartBackend.ps1 | start-backend.sh |
-| Start Kiro Crew.cmd | StartCrew.ps1 | crew-start.sh |
-| Stop Kiro Crew.cmd | StopCrew.ps1 | crew-stop.sh |
+| 1_StartBackend.cmd | StartBackend.ps1 | start-backend.sh |
+| 2_StartCrew.cmd | StartCrew.ps1 | crew-start.sh |
+| 3_StopCrew.cmd | StopCrew.ps1 | crew-stop.sh |
+| 9_Allclean.cmd | RemoveEnvironment.ps1 | 対象の WSL を登録解除 |
 
 新規インポート前は保存先を空に保つため、途中記録を `<InstallLocation>.opencae-state\environment.json` に置く。インポート後は保存先へ記録を移す。削除前にも回復記録を用意する。取得キャッシュと保存先の既定値はユーザープロファイル直下の OpenCAE を使用する。
 
@@ -209,7 +210,7 @@ WSL の **InstallLocation** に環境ごとの `environment.json`、PowerShell �
 - Crew は環境内の専用サービス名で管理し、Windows の起動端末を閉じても稼働を維持する。OS／WSL 起動時の自動起動は標準で有効にしない。
 - 認証は指定ユーザーの製品設定領域に保存する。アクセス URL を含み得るログは本人用権限で保管し、Git や CI artifact の対象にしない。失敗時は次の操作とログの場所を示す。
 
-環境削除は `RemoveEnvironment.ps1 -ConfigPath ...` で行う。WSL 登録 ID・保存先・Linux 識別記録を照合し、削除内容を表示して明示確認する。`-WhatIf` では削除・設定変更を行わない。対象 WSL のデータと対応する既知の起動ファイル・メタデータだけを削除し、他環境と Windows の配布元は保持する。
+環境削除は `9_Allclean.cmd` または `RemoveEnvironment.ps1 -ConfigPath ...` で行う。Allclean は実行する登録解除コマンド・対象・消えるデータを日本語で表示し、正確な DELETE 入力を求める。未入力・他の入力では何も削除しない。WSL 登録 ID・保存先・Linux 識別記録を照合し、削除内容を表示して明示確認する。`-WhatIf` では削除・設定変更を行わない。対象 WSL のデータと対応する既知の起動ファイル・メタデータだけを削除し、他環境と Windows の配布元は保持する。
 
 ### 5.7 Proxy プレビュー
 
@@ -232,7 +233,7 @@ Docker 層の Dockerfile、Compose 定義、作業フォルダー構成は共通
 - MPI 2プロセスの結果が直列計算と許容誤差内で一致する。
 - 追加 Python パッケージを読み込め、foamlib でケースを読み、日本語ラベル付きグラフを保存できる。
 - Crew から Kiro CLI を使い、計算コンテナ内のコマンドを実行できる。OpenCode／Codex CLI も選択可能とし、個人認証と Crew 経由の会話はバックエンド別に手動確認する。
-- Windows の新規環境作成、任意名・任意保存先、ZIP／clone 両経路、途中再開、3つの CMD による認証・起動・停止を確認する。
+- Windows の新規環境作成、任意名・任意保存先、ZIP／clone 両経路、途中再開、4つの CMD による認証・起動・停止を確認する。
 - Ubuntu 24.04 単体で Bash のセットアップ処理を利用できる。Proxy プレビューの検証状況を別途記録する。
 - コンテナを作り直しても作業フォルダーのデータが残る。
 - macOS 対応版では Apple Silicon Mac でも同じ確認を完了する。

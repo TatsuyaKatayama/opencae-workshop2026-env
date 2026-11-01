@@ -31,11 +31,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\Setup.ps
 
 WSL のインストール先（例 `C:\wsl_img\opencae-workshop2026`）に置かれた次のファイルをダブルクリックします。
 
-1. **Start Backend.cmd**：Kiro CLI・Codex・OpenCode を選び、端末の案内に従って認証します。Codex はデバイスコード認証、OpenCode は提供先ごとの認証です。
-2. **Start Kiro Crew.cmd**：Crew を起動し、ブラウザーで開きます。
-3. **Stop Kiro Crew.cmd**：終了時に Crew を停止します。Docker や計算コンテナは停止しません。
+1. **1_StartBackend.cmd**：Kiro CLI・Codex・OpenCode を選び、端末の案内に従って認証します。Codex はデバイスコード認証、OpenCode は提供先ごとの認証です。
+2. **2_StartCrew.cmd**：Crew を起動し、ブラウザーで開きます。
+3. **3_StopCrew.cmd**：終了時に Crew を停止します。Docker や計算コンテナは停止しません。
 
 Crew の管理画面はバックエンド未認証でも起動できます。バックエンド変更時は Stop → Start で反映します。OpenCode は提供先とモデルも画面で選びます。KAS は導入・選択しません。
+
+PS1 は保存先の `scripts` フォルダーにまとめます。環境を完全に削除する場合だけ **9_Allclean.cmd** を使用してください。対象とデータ消失の警告が表示され、`DELETE` と入力するまで削除しません。
 
 認証 URL を自動で開けない場合は端末の URL をブラウザーで開きます。認証コードや Crew のアクセス URL は共有しないでください。
 

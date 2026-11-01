@@ -30,28 +30,31 @@ Ubuntu の公式 rootfs を取得し、プロジェクトで固定した SHA256 
 
 ## 完了後と当日の操作
 
-WSL のインストール先に3つの CMD ファイルを配置します。ダブルクリックすると、同じフォルダーの PowerShell と `environment.json` を使って実行します。処理後は端末に結果を残します。
+WSL のインストール先に4つの CMD ファイルを配置します。ダブルクリックすると、scripts フォルダーの PowerShell と直下の `environment.json` を使って実行します。通常の起動・停止は処理後に端末へ結果を残します。`9_Allclean.cmd` は削除確認専用で、普段の終了には `3_StopCrew.cmd` を使用してください。
 
-1. **Start Backend.cmd**：`1: Kiro CLI / 2: Codex / 3: OpenCode` を選択します。Kiro CLI・Codex は認証済みなら再ログインせず、未認証ならデバイス認証を開始します。Codex は ChatGPT の個人設定または組織設定でデバイスコード認証の許可が必要です。OpenCode は提供先を選んで API キーまたは OAuth で認証します。既に設定済みの提供先やローカルモデルを使う場合はログイン確認に `n` を入力できます。
-2. **Start Kiro Crew.cmd**：起動完了後に既定ブラウザーで Crew を開きます。起動済みならその画面を開きます。端末を閉じても Crew は動きます。
-3. **Stop Kiro Crew.cmd**：終了時に実行します。この環境の Crew のみ停止し、Docker や計算コンテナは停止しません。ブラウザーのタブは自分で閉じます。
+1. **1_StartBackend.cmd**：`1: Kiro CLI / 2: Codex / 3: OpenCode` を選択します。Kiro CLI・Codex は認証済みなら再ログインせず、未認証ならデバイス認証を開始します。Codex は ChatGPT の個人設定または組織設定でデバイスコード認証の許可が必要です。OpenCode は提供先を選んで API キーまたは OAuth で認証します。既に設定済みの提供先やローカルモデルを使う場合はログイン確認に `n` を入力できます。
+2. **2_StartCrew.cmd**：起動完了後に既定ブラウザーで Crew を開きます。起動済みならその画面を開きます。端末を閉じても Crew は動きます。
+3. **3_StopCrew.cmd**：終了時に実行します。この環境の Crew のみ停止し、Docker や計算コンテナは停止しません。ブラウザーのタブは自分で閉じます。
 
 Crew の管理画面はバックエンドの認証前にも起動できます。バックエンドを変更した場合は Stop → Start で反映します。OpenCode の保存済み認証だけではモデル利用可否を断定できないため、Crew で提供先・モデルを選択し、会話を確認してください。KAS は使用しません。
 
 認証 URL を自動で開けない場合は、端末に表示された URL を手動でブラウザーに貼り付けます。URL とコードを共有ログへ保存しないでください。Crew の URL もアクセス権を含みます。エラー時は端末が残るので内容を確認します。
 
-Windows の設定と PS1・CMD は、WSL のインストール先にまとめて配置します。例：
+CMD と設定は WSL のインストール先の直下、PS1 は scripts フォルダーに配置します。例：
 
 ```text
 C:\wsl_img\opencae-workshop2026\
   ext4.vhdx
   environment.json
-  Start Backend.cmd
-  Start Kiro Crew.cmd
-  Stop Kiro Crew.cmd
-  Common.ps1
-  StartBackend.ps1 / StartCrew.ps1 / StopCrew.ps1
-  RemoveEnvironment.ps1 / UpdateLaunchers.ps1
+  1_StartBackend.cmd
+  2_StartCrew.cmd
+  3_StopCrew.cmd
+  9_Allclean.cmd
+  scripts\
+    Common.ps1
+    StartBackend.ps1 / StartCrew.ps1 / StopCrew.ps1
+    RemoveEnvironment.ps1 / UpdateLaunchers.ps1
+    runtime\crew-start.sh / crew-keepalive.sh
 ```
 
 元の clone／ZIP 解凍先を移動しても、配置済みのファイルから起動できます。設定や起動ファイルを AppData に新規保存せず、ショートカットも作成しません。パッケージ化された端末で AppData が別の場所へリダイレクトされる問題を避けます。認証情報は引き続き WSL 内のユーザー領域に保存します。
@@ -73,7 +76,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\UpdateLa
 
 Ubuntu 内の工程記録は `~/.local/state/opencae-workshop2026/`、CFD のログ・結果はプロジェクト内の `work/` です。Crew の本人用ログは `~/.local/state/opencae-workshop2026/logs/crew.log` にあります。ログにはアクセス URL が含まれる可能性があるので共有しないでください。
 
-Windows／WSL の再起動後は **Start Kiro Crew.cmd** を再実行します。systemd サービスだけでは WSL がアイドル終了するため、ランチャーは Crew の起動中だけ非表示の WSL プロセスを維持します。Stop Kiro Crew.cmd で停止すると、この維持処理も終了します。維持プロセスは HTTP の一時的な不調では終了せず、専用ロックで重複を防ぎます。停止直後の TIME_WAIT は待受ポートと区別して確認します。自動起動は設定しません。Windows から localhost へ接続できない場合は、WSL の localhost 転送や組織のファイアウォール設定を確認します。これらのグローバル設定はスクリプトで書き換えません。
+Windows／WSL の再起動後は **2_StartCrew.cmd** を再実行します。systemd サービスだけでは WSL がアイドル終了するため、ランチャーは Crew の起動中だけ非表示の WSL プロセスを維持します。3_StopCrew.cmd で停止すると、この維持処理も終了します。維持プロセスは HTTP の一時的な不調では終了せず、専用ロックで重複を防ぎます。停止直後の TIME_WAIT は待受ポートと区別して確認します。自動起動は設定しません。Windows から localhost へ接続できない場合は、WSL の localhost 転送や組織のファイアウォール設定を確認します。これらのグローバル設定はスクリプトで書き換えません。
+
+## Allclean
+
+`9_Allclean.cmd` は削除専用です。対象の WSL 名・保存先と `wsl --unregister` を実行すること、全 Linux ファイル・認証情報・Docker イメージ・計算結果が消えることを警告します。「本当にいいですか？」に **DELETE** と正確に入力した場合だけ進み、Enter やその他の入力ではキャンセルします。他の WSL と取得元のリポジトリは保持します。
 
 ## 環境の削除
 
