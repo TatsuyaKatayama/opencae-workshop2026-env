@@ -13,33 +13,22 @@ RUN rm -f /etc/apt/sources.list.d/ubuntu.sources && \
         "$APT_SNAPSHOT" "$APT_SNAPSHOT" "$APT_SNAPSHOT" > /etc/apt/sources.list && \
     printf 'Acquire::Retries "3";\n' > /etc/apt/apt.conf.d/80-retries
 
-FROM base AS compiler
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential ca-certificates curl xz-utils flex bison cmake ninja-build \
-    zlib1g-dev libosmesa6-dev libfreetype-dev \
-    python3-dev python3-venv && rm -rf /var/lib/apt/lists/*
-
-FROM compiler AS paraview-arm64
-ARG PARAVIEW_URL
-ARG PARAVIEW_SHA256
-ARG BUILD_JOBS=2
-RUN curl -fSL --retry 3 "$PARAVIEW_URL" -o /tmp/paraview.tar.xz && \
-    echo "$PARAVIEW_SHA256  /tmp/paraview.tar.xz" | sha256sum -c - && \
-    mkdir /src && tar -xJf /tmp/paraview.tar.xz -C /src --strip-components=1 && \
-    rm /tmp/paraview.tar.xz
-RUN --mount=type=cache,id=paraview-5.13.3-arm64,target=/build,sharing=locked \
-    cmake -S /src -B /build -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/paraview \
-    -DPARAVIEW_BUILD_EDITION=CATALYST_RENDERING \
-    -DPARAVIEW_USE_QT=OFF -DPARAVIEW_USE_PYTHON=ON -DPARAVIEW_USE_MPI=OFF \
-    -DPARAVIEW_BUILD_TESTING=OFF -DPARAVIEW_ENABLE_EXAMPLES=OFF \
-    -DVTK_USE_X=OFF -DVTK_OPENGL_HAS_OSMESA=ON -DVTK_OPENGL_HAS_EGL=OFF \
-    -DPython3_EXECUTABLE=/usr/bin/python3 && \
-    cmake --build /build --parallel "$BUILD_JOBS" && \
-    cmake --install /build && \
-    mkdir -p /opt/paraview/share/licenses && \
-    cd /src && find . -type f \( -iname 'license*' -o -iname 'copying*' -o -iname 'copyright*' \) \
-        -exec cp --parents -t /opt/paraview/share/licenses '{}' +
+FROM base AS paraview-arm64
+ARG MICROMAMBA_ARM64_URL
+ARG MICROMAMBA_ARM64_SHA256
+COPY containers/cfd-tools/paraview-arm64.lock /tmp/paraview-arm64.lock
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl bzip2 && \
+    curl -fsSL --retry 3 "$MICROMAMBA_ARM64_URL" -o /tmp/micromamba && \
+    echo "$MICROMAMBA_ARM64_SHA256  /tmp/micromamba" | sha256sum -c - && \
+    chmod 755 /tmp/micromamba && \
+    MAMBA_ROOT_PREFIX=/tmp/mamba /tmp/micromamba create -y --always-copy \
+        --prefix /opt/paraview --file /tmp/paraview-arm64.lock && \
+    mkdir -p /opt/paraview/share/licenses/conda /opt/paraview/share/opencae && \
+    cp /tmp/paraview-arm64.lock /opt/paraview/share/opencae/ && \
+    for licenses in /tmp/mamba/pkgs/*/info/licenses; do \
+        test ! -d "$licenses" || cp -a "$licenses" "/opt/paraview/share/licenses/conda/$(basename "$(dirname "$(dirname "$licenses")")")"; \
+    done && \
+    rm -rf /tmp/mamba /tmp/micromamba /tmp/paraview-arm64.lock /var/lib/apt/lists/*
 
 FROM base AS paraview-amd64
 ARG PARAVIEW_AMD64_URL
@@ -52,7 +41,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 
 FROM paraview-${TARGETARCH} AS paraview
 
-FROM compiler AS uv-download
+FROM base AS uv-download
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
 ARG TARGETARCH
 ARG UV_VERSION
 ARG UV_ARM64_SHA256

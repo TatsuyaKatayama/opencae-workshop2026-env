@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-while IFS= read -r file; do bash -n "$file"; done < <(find "$root/scripts" "$root/containers" "$root/examples" "$root/setup" -name '*.sh' -type f)
-python3 -m compileall -q "$root/examples" "$root/tests" "$root/setup/ubuntu2404"
+while IFS= read -r file; do bash -n "$file"; done < <(find "$root/scripts" "$root/containers" "$root/examples" "$root/setup" -type f \( -name '*.sh' -o -name '*.command' \))
+python3 -m compileall -q "$root/examples" "$root/tests" "$root/setup/ubuntu2404" "$root/setup/macos"
 python3 -m unittest discover -s "$root/tests" -v
 source "$root/scripts/lib/common.sh"
 compose config --format json | python3 -c '

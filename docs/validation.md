@@ -17,7 +17,7 @@
 | 描画・動画・永続化の一括検証 | Linux amd64 の Actions とローカル WSL2 / ARM64 で成功 |
 | Windows 新規構築 | ARM64 / x64 とも未検証 |
 | Crew / Kiro CLI / OpenCode | この WSL に CLI 2.34.0 / Crew 0.9.0 を導入し管理画面を起動。利用者が認証し、Crew 経由の計算・描画・動画生成まで成功を報告。OpenCode は既存導入あり、Crew 接続は未検証 |
-| Apple Silicon Mac | 後続工程 |
+| Apple Silicon Mac | 導入・認証・launchd制御を実装。ホスト導入CI成功、Colima通し実機受け入れは未実施 |
 
 ## GitHub Actions
 
@@ -121,3 +121,42 @@ CI では既存の共有 pipx 領域 `/opt/pipx` を継承すると AppArmor の
 ## Windows 版 v1.0.0（2026-11-01）
 
 利用者から Windows 版の実機確認完了の報告を受け、v1.0.0 としてリリースします。[Windows CI 41287149106](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41287149106) で x64／ARM64 の PowerShell 5.1／7 が成功し、Allclean が自身の CMD を削除する場合の終了もダミー処理で確認しました。[ソース検査 41287149173](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41287149173)、[バックエンド導入 41287149125](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41287149125) も成功しています。過去の未確認事項は各時点の記録です。Proxy はプレビュー、macOS は未対応であり、実際の WSL 全削除は開発機で行っていません。
+
+
+## macOS 実装と ARM64 OSMesa バイナリ（2026-11-01）
+
+`feature/macos-support` で、macOS 15以降のApple Silicon向けにHomebrew bottle、固定ネイティブCLI、専用Colima profile、launchdと.command入口を追加しました。Homebrew自体の初回導入は公式手順で事前に行います。macOS標準Bash 3.2を対象とし、Python 3.12で設定照合・ロック・工程再開・認証・サービス制御を行います。個人認証・ブラウザー・Colima・CFD通し・スリープ復帰等は実機受け入れに残します。
+
+ARM64 ParaViewは同じ5.13.3のconda-forge `py312hcc5151f_8_osmesa` 配布物があることを確認しました。[調査CI 41311322286](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41311322286) でDISPLAYなし、`vtkOSOpenGLRenderWindow`、Mesa 25.0.5／llvmpipeによる画像生成が成功しました。全依存の取得URL・SHA256を明示ロックに固定し、CFDイメージのARM64ステージをソースビルドからバイナリ導入へ変更しました。イメージタグはof2606-r2です。
+
+[Native image CI 41311793737](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41311793737) はUbuntu ARM64／amd64の両方で成功しました。CFDイメージのネイティブビルドと、OpenFOAM直列・MPI、ParaViewのOpenFOAMReaderとCPU画像、後処理、動画、永続化を再確認しています。この成功はLinux上のコンテナ検証であり、MacのColima経由の共有フォルダーやlaunchdの実機成功を示すものではありません。
+
+配布物はスクリプト・Dockerfile・設定・ロック・資料のみです。conda-forgeはビルド時に各環境から取得し、Anaconda Distribution・Miniconda・defaultsは使いません。取得物のライセンス表示を保持し、ビルド済みイメージを公開する処理はありません。
+
+[macOS CI 41312974824](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41312974824) ではApple Siliconのmacos-15で標準Bashの構文・制御、Kiro app bundleの署名検証・固定版起動、Crew・OpenCode・Codex・Node／ACPの実導入、未認証状態、ACP初期応答、再導入とバックエンド保持が成功しました。Colimaを起動せず `--agents-only` で実施し、認証やLLM呼び出しは行っていません。
+
+[macOS CI 41313214361](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313214361) は上記に加え、実際のlaunchdへのbootstrap、ダミーHTTPサービスの準備完了、重複起動時の再利用、bootout、停止後の状態確認も成功しました。これはサービス制御の実検証であり、Crew本体の会話・Colimaの実起動は含めません。Linux側では共通検査も通過し、開発用WSLにホストCLIや計算環境を導入していません。
+
+最終のローカル共通検査は66テスト（macOS実launchd専用の1件のみLinuxではスキップ）が通過しました。標準Bashでの日本語隣接変数は明示的に区切り、呼び出し元のPATHを保持して制御テストが実Dockerへ誤接続しないことも確認しています。
+
+## 最終コミットのCIとissue #1の確認（2026-11-01）
+
+実装コミット `4d6a455` で以下のCIがすべて成功しました。
+
+- [macOSホスト導入・制御](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313735909)：標準Bash、固定バイナリ導入、実launchd＋ダミーHTTPサービス、未認証状態・ACP、再導入。
+- [Native image smoke tests](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313735843)：Ubuntu ARM64／amd64のビルド・OpenFOAM直列／MPI・CPU描画・動画生成・永続化。
+- [Windows制御](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313735985)：x64／ARM64、PowerShell 5.1／7。
+- [Linuxバックエンド導入](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313735828)：ARM64／amd64の実導入・未認証状態・ACP・再導入。
+- [共通ソース検査](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313735917)。
+
+[issue #1](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/issues/1) は別途確認しました。`colima ssh` は通常利用には不要な診断操作であり、今回の構成はCrewとCLIをMac上、計算処理をDocker CLI／Compose経由で実行します。NginxのHTTPポート転送検証は本プロジェクトの必須経路ではなく、既存のCFD Composeとスモークケースを検証の中心としています。issue本文のチェックリストは変更・クローズしていません。Colimaを含むMac実機の通し確認、個人認証、Finder操作は未実施であり、CI成功で代替しません。
+
+## Homebrewの初回自動導入（2026-11-01）
+
+Homebrew手動導入の前提を変更し、セットアップ内で既存の `/opt/homebrew` を確認・再利用し、未導入なら公式インストーラーを起動する処理を追加しました。公式スクリプトはHomebrew/installのコミット `8c82c081753d4263da0cfe615ef8d9433425f22b` とSHA256を固定しています。対話入力を維持し、ハッシュ不一致・取得失敗・導入失敗・導入後の配置先不一致は後続工程へ進めません。`--plan` は導入・通信を行いません。
+
+専用hello-world／SSH／Nginxテストは追加せず、通常セットアップで自動実行するOpenFOAMの共通スモークで今回のCFD利用経路を確認する方針にしました。実際のMacでのHomebrew初回導入（sudo入力・Command Line Toolsを含む）と、Colima経由の通し確認は引き続き未実施です。issue本文の変更やクローズ、develop／mainへのマージ・タグ・リリースは行っていません。
+
+ローカルの共通検査は74テスト（LinuxではmacOS実launchd専用の1件をスキップ）が通過しました。Homebrew制御の8件は既存環境・初回導入・非対話拒否・SHA256不一致・取得失敗・導入失敗・再実行・一時ファイル清掃をテスト用スクリプトで確認しています。
+
+実装コミット `317a39e` の [macOS CI 41315334930](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41315334930)、[ソース検査 41315334941](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41315334941)、[Linux両CPUの導入 41315334903](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41315334903)、[Windows両CPUの制御 41315334990](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41315334990) がすべて成功しました。初回Homebrew導入の制御はダミーインストーラー、実セットアップはランナーの既存Homebrewで確認しており、macOSを初期化してCLToolsから実導入した検証ではありません。公式インストーラーはCLTools未導入時にAppleのsoftwareupdateを使用し、必要に応じてxcode-selectのGUIへフォールバックします。

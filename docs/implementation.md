@@ -4,7 +4,7 @@
 
 - Windows の標準構成は WSL2 Ubuntu 24.04 内の Docker Engine・Linux 版 Docker CLI・Compose・Buildx。Docker Desktop は導入・標準検証対象に含めない。
 - 最初の開発・検証先は、このリポジトリを配置した WSL2 / ARM64 環境。
-- OpenFOAM は公式 apt を優先。ParaView は apt 版の無画面描画を検証した結果、OSMesa 版を採用。amd64 は公式バイナリ、ARM64 は同版のソースビルドを使う。
+- OpenFOAM は公式 apt を優先。ParaView は apt 版の無画面描画を検証した結果、OSMesa 版を採用。amd64 は公式バイナリ、ARM64 は conda-forge の同版 OSMesa バイナリを依存ロックから取得する。
 - 両 CPU でツールの版をそろえる。受講者はネイティブ CPU でローカルビルドし、エミュレーションは標準手順に含めない。
 - ホストの導入自動化は Bash / PowerShell。メモリ16GBを暫定基準とし、ビルド並列数を指定可能にする。
 
@@ -17,7 +17,7 @@
 | 3 | amd64 ネイティブ検証と CI | 同一の版・ケースが両 CPU で動作 |
 | 4 | Windows / WSL の段階別セットアップ、Crew / CLI 導入 | 新規 Windows ARM64 / x64 で配布ファイルだけから構築・接続 |
 | 5 | リリースの固定 | Windows 両 CPU の実機検証、版・ライセンス・資料を確定 |
-| 6 | Apple Silicon Mac | Docker Desktop を前提としない実行基盤を選び、共通ケースを検証 |
+| 6 | Apple Silicon Mac | Colima・ネイティブ CLI・launchd を導入し、共通ケースと実機操作を検証 |
 
 初期実装対象は段階1〜2。段階3向けに両 CPU 共通の Dockerfile とネイティブ CI を用意する。実施済みの検証は `validation.md` に記録する。
 

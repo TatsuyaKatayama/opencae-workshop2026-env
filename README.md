@@ -25,7 +25,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\Setup.ps
 
 専用 Ubuntu の新規作成、Docker・Kiro CLI・Crew・OpenCode・Codex CLI の導入、CFD イメージのローカルビルドと検証、インストール先への起動スクリプト配置まで行います。既存 WSL は流用しません。詳細と Proxy プレビュー、途中再開は [Windows 手順](docs/windows.md) を参照してください。
 
-メモリ16GBを暫定基準とし、ビルドは標準2並列です。特に ARM64 の ParaView コンパイルは時間がかかるため、事前に完了してください。ビルド済みイメージは公開・配布しません。
+メモリ16GBを暫定基準とし、ビルドは標準2並列です。ARM64 の ParaView もビルド済みの OSMesa パッケージを使用します。初回の取得・イメージ構築は事前に完了してください。ビルド済みイメージは公開・配布しません。
 
 ## 当日の操作
 
@@ -52,6 +52,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\UpdateLa
 
 設定はインストール先の `environment.json` に保存します。旧 AppData の記録は移行元として読み取り、デスクトップの古いショートカットは手動で削除してください。
 
+## Apple Silicon Mac
+
+macOS 15 以降の Apple Silicon Macで、プロジェクト内から実行します。Homebrewは既存環境を再利用し、未導入なら公式インストーラーを自動起動します。管理者パスワード等は画面の案内に従って入力してください。Docker Desktop は使わず、専用 Colima で Linux ARM64 コンテナを動かします。
+
+```bash
+bash setup/macos/setup.sh
+```
+
+当日は `setup/macos/1_StartBackend.command` → `2_StartCrew.command`、終了時は `3_StopCrew.command` を使用します。CLI と Crew は Mac 上で動作します。導入要件・再開・CI と実機確認の範囲は [macOS 手順](docs/macos.md) を参照してください。
+
 ## Ubuntu から直接利用する場合
 
 Ubuntu 24.04、systemd、sudo 権限を持つ通常ユーザーで、Linux ファイルシステム内にプロジェクトを配置します。
@@ -77,9 +87,9 @@ scripts/smoke-test.sh
 
 ## 検証と構成
 
-Ubuntu ARM64／amd64 の新規導入・CFD ビルド・計算・CPU 描画・動画生成は CI 成功済みです。Windows x64／ARM64 の PowerShell 5.1／7 で制御テストも成功しています。Windows 版は利用者による実機確認を完了し、v1.0.0 としてリリースしました。macOS 対応は今後の予定です。検証済み範囲は [検証記録](docs/validation.md) を参照してください。
+Ubuntu ARM64／amd64 の新規導入・CFD ビルド・計算・CPU 描画・動画生成は CI 成功済みです。Windows x64／ARM64 の PowerShell 5.1／7 で制御テストも成功しています。Windows 版は利用者による実機確認を完了し、v1.0.0 としてリリースしました。Apple Silicon macOS 用スクリプトも実装しています。Colima を含む実機受け入れは未実施です。検証済み範囲は [検証記録](docs/validation.md) を参照してください。
 
-OpenFOAM v2606 は公式 apt、ParaView 5.13.3 は OSMesa 対応版を使用します。amd64 は公式バイナリ、ARM64 はソースビルドです。OpenFOAM の採用 apt 版は **2606.0~rc2-1** であり、正式版ソースと同一とは扱いません。一般の Python 後処理は ParaView と別の venv です。
+OpenFOAM v2606 は公式 apt、ParaView 5.13.3 は OSMesa 対応版を使用します。amd64 は公式バイナリ、ARM64 は conda-forge の同版 OSMesa バイナリと依存ロックを使用します。OpenFOAM の採用 apt 版は **2606.0~rc2-1** であり、正式版ソースと同一とは扱いません。一般の Python 後処理は ParaView と別の venv です。
 
 ## Windows で文字化けする場合
 
@@ -93,6 +103,7 @@ Bash が読み込む `*.env` は UTF-8（BOM なし）・LF 改行を維持し�
 
 ## 関連資料
 
+- [v2.0 リリースノート](docs/releases/v2.0.md)
 - [v1.0.0 リリースノート](docs/releases/v1.0.0.md)
 - [仕様書](PROJECT_SPEC.md)
 - [ビルド・キャッシュ・依存関係の更新](docs/image-build.md)

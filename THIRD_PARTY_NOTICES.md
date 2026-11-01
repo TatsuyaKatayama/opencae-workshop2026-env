@@ -6,9 +6,12 @@
 | --- | --- |
 | Ubuntu と apt パッケージ | Ubuntu の署名付きアーカイブ。イメージ内 `/usr/share/doc/<package>/copyright` |
 | OpenFOAM | https://dl.openfoam.com/repos/deb/ 。GPL-3.0-or-later 等、取得パッケージとソース内の表示を保持 |
-| ParaView / 同梱 VTK・依存ソース | https://www.paraview.org/files/v5.13/ParaView-v5.13.3.tar.xz 。各ソース・配布物の License / Copyright と、インストール時のライセンス文書 |
+| ParaView / 同梱 VTK・依存ライブラリ | https://www.paraview.org/files/v5.13/ParaView-v5.13.3.tar.xz 。各ソース・配布物の License / Copyright と、インストール時のライセンス文書 |
 | Mesa / OSMesa / MPI | Ubuntu パッケージごとの copyright |
 | ffmpeg | Ubuntu パッケージの copyright と `/opt/workshop-manifest/ffmpeg-buildconf.txt` |
+| conda-forge ARM64 ParaView / Mesa・依存パッケージ | `paraview-arm64.lock` の固定 URL・SHA256。`/opt/paraview/share/licenses/conda` と `conda-meta` の各パッケージ表示。ParaView 本体は BSD-3-Clause |
+| micromamba | https://github.com/mamba-org/mamba 。取得バイナリはビルド工程だけで使用。BSD-3-Clause 等の上流表示 |
+| Colima / Lima / Homebrew | macOS ホストの公式 Homebrew bottle。各インストール先のライセンスと上流表示 |
 | uv | https://github.com/astral-sh/uv 。MIT / Apache-2.0 等の上流表示 |
 | Python パッケージ | PyPI。ロックファイルに版・ハッシュを記録。venv 内 dist-info のライセンスを保持 |
 

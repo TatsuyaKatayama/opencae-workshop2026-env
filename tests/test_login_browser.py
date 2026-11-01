@@ -3,6 +3,7 @@ import base64
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 path = Path(__file__).resolve().parents[1] / 'setup/ubuntu2404/login_browser.py'
 spec = importlib.util.spec_from_file_location('login_browser', path)
@@ -27,9 +28,15 @@ class BrowserTest(unittest.TestCase):
             self.assertIsNone(browser.authentication_url(url,'codex'))
         self.assertIsNone(browser.authentication_url('https://unknown-provider.test/login','opencode'))
 
+    def test_macos_open_receives_url_as_one_literal_argument(self):
+        url = "https://auth.openai.com/codex/device?value=';echo BAD;#"
+        with patch.object(browser.sys, 'platform', 'darwin'):
+            self.assertEqual(browser.browser_command(url), ['/usr/bin/open', url])
+
     def test_encoded_command_quotes_url_as_literal(self):
         url = "https://app.kiro.dev/signin?value=';echo BAD;#"
-        command = browser.browser_command(url)
+        with patch.object(browser.sys, 'platform', 'linux'):
+            command = browser.browser_command(url)
         self.assertEqual(command[0], 'powershell.exe')
         self.assertEqual(base64.b64decode(command[-1]).decode('utf-16le'),
                          "Start-Process -FilePath 'https://app.kiro.dev/signin?value='';echo BAD;#'")
