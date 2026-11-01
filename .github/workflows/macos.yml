@@ -27,6 +27,8 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_login_browser.py' -v
       - name: Install pinned macOS host binaries without Docker or CFD
         run: /bin/bash setup/macos/setup.sh --agents-only
+      - name: Verify native launchd with a dummy HTTP service
+        run: /opt/homebrew/opt/python@3.12/bin/python3.12 -m unittest discover -s tests -p test_macos_launchd.py -v
       - name: Verify unauthenticated backends and ACP
         shell: bash
         run: |
