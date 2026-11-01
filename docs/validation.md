@@ -138,3 +138,15 @@ ARM64 ParaViewは同じ5.13.3のconda-forge `py312hcc5151f_8_osmesa` 配布物�
 [macOS CI 41313214361](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313214361) は上記に加え、実際のlaunchdへのbootstrap、ダミーHTTPサービスの準備完了、重複起動時の再利用、bootout、停止後の状態確認も成功しました。これはサービス制御の実検証であり、Crew本体の会話・Colimaの実起動は含めません。Linux側では共通検査も通過し、開発用WSLにホストCLIや計算環境を導入していません。
 
 最終のローカル共通検査は66テスト（macOS実launchd専用の1件のみLinuxではスキップ）が通過しました。標準Bashでの日本語隣接変数は明示的に区切り、呼び出し元のPATHを保持して制御テストが実Dockerへ誤接続しないことも確認しています。
+
+## 最終コミットのCIとissue #1の確認（2026-11-01）
+
+実装コミット `4d6a455` で以下のCIがすべて成功しました。
+
+- [macOSホスト導入・制御](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313735909)：標準Bash、固定バイナリ導入、実launchd＋ダミーHTTPサービス、未認証状態・ACP、再導入。
+- [Native image smoke tests](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313735843)：Ubuntu ARM64／amd64のビルド・OpenFOAM直列／MPI・CPU描画・動画生成・永続化。
+- [Windows制御](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313735985)：x64／ARM64、PowerShell 5.1／7。
+- [Linuxバックエンド導入](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313735828)：ARM64／amd64の実導入・未認証状態・ACP・再導入。
+- [共通ソース検査](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313735917)。
+
+[issue #1](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/issues/1) は別途確認しました。`colima ssh` は通常利用には不要な診断操作であり、今回の構成はCrewとCLIをMac上、計算処理をDocker CLI／Compose経由で実行します。NginxのHTTPポート転送検証は本プロジェクトの必須経路ではなく、既存のCFD Composeとスモークケースを検証の中心としています。issue本文のチェックリストは変更・クローズしていません。Colimaを含むMac実機の通し確認、個人認証、Finder操作は未実施であり、CI成功で代替しません。

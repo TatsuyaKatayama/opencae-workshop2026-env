@@ -12,6 +12,8 @@ Colima profile は `opencae-workshop2026`、Docker context は `colima-opencae-w
 
 Colima はコンテナ用の VM です。CLI の認証と Crew の Web サーバーは Mac 上で動作するため、WSL の稼働維持処理は使いません。
 
+通常利用で `colima ssh` によるVMへのログインは不要です。VM内部のOS確認や障害調査が必要な場合にだけ使用します。CrewのHTTPサーバーもMac上にあるため、Nginxを使ったコンテナのポート公開は必須の確認経路ではありません。計算用途のComposeは共通のCFDスモークケースで確認します。
+
 ## 事前準備
 
 1. [Homebrew の公式手順](https://brew.sh/ja/)でネイティブ ARM64 版を導入します。必要な Command Line Tools や管理者操作もこの段階で完了してください。セットアップは `/opt/homebrew/bin/brew` を使用します。
