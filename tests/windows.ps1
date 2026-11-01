@@ -271,12 +271,18 @@ if ($env:OS -eq 'Windows_NT') {
             $info.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
             $process=[Diagnostics.Process]::Start($info)
             try {
-                if ($null -eq $process -or !$process.WaitForExit(15000)) {
-                    if ($null -ne $process) { $process.Kill() }
-                    throw 'ShellExecute shortcut launch timed out'
+                # ShellExecute が返すハンドルは起動先ではなくシェル側の場合がある。
+                # テスト用スクリプトの実行結果を待って、起動自体を検証する。
+                $deadline=[DateTime]::UtcNow.AddSeconds(15)
+                do {
+                    $markers=@(Get-ChildItem -LiteralPath $shortcutLaunchers -Filter '*.ran')
+                    if ($markers.Count -gt 0) { break }
+                    Start-Sleep -Milliseconds 100
+                } while ([DateTime]::UtcNow -lt $deadline)
+                if ($markers.Count -eq 0) {
+                    $processName=if ($null -eq $process) { 'no process handle' } else { $process.ProcessName }
+                    throw "ShellExecute did not execute the shortcut target ($processName)"
                 }
-                Check ($process.ExitCode -eq 0) 'ShellExecute shortcut failed'
-                $markers=@(Get-ChildItem -LiteralPath $shortcutLaunchers -Filter '*.ran')
                 Check ($markers.Count -eq 1) 'ShellExecute must execute the shortcut target'
                 Check ([IO.File]::ReadAllText($markers[0].FullName) -eq $shortcutConfig) 'ShellExecute must preserve the literal configuration path'
             } finally { if ($null -ne $process) { $process.Dispose() } }
