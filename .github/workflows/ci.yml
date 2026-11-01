@@ -1,0 +1,91 @@
+name: CI
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      windows: ${{ steps.paths.outputs.windows }}
+      backends: ${{ steps.paths.outputs.backends }}
+      macos: ${{ steps.paths.outputs.macos }}
+      macos_vm: ${{ steps.paths.outputs.macos_vm }}
+      wsl: ${{ steps.paths.outputs.wsl }}
+      image: ${{ steps.paths.outputs.image }}
+      setup: ${{ steps.paths.outputs.setup }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: paths
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ "$EVENT" == workflow_dispatch ]]; then
+            python3 scripts/ci/changes.py --full
+          elif [[ "$EVENT" == pull_request ]]; then
+            python3 scripts/ci/changes.py --base "$(git merge-base "$BASE" "$HEAD")" --head "$HEAD"
+          else
+            python3 scripts/ci/changes.py --base "$BASE" --head "$HEAD"
+          fi
+  source:
+    if: github.event_name != 'push'
+    uses: ./.github/workflows/check.yml
+  windows:
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.windows == 'true'
+    uses: ./.github/workflows/windows.yml
+  backends:
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.backends == 'true'
+    uses: ./.github/workflows/backends.yml
+  macos:
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.macos == 'true'
+    uses: ./.github/workflows/macos.yml
+  macos-vm:
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.macos_vm == 'true'
+    uses: ./.github/workflows/macos-vm.yml
+  windows-wsl:
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.wsl == 'true'
+    uses: ./.github/workflows/windows-wsl.yml
+  setup:
+    needs: changes
+    if: github.event_name != 'pull_request' && needs.changes.outputs.setup == 'true'
+    uses: ./.github/workflows/ubuntu-setup.yml
+    with:
+      architecture: both
+  image:
+    needs: changes
+    if: github.event_name != 'pull_request' && needs.changes.outputs.image == 'true' && needs.changes.outputs.setup != 'true'
+    uses: ./.github/workflows/image.yml
+  required:
+    if: always()
+    needs: [changes, source, windows, backends, macos, macos-vm, windows-wsl, setup, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Reject any failed or cancelled check
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          results = json.loads(os.environ['RESULTS'])
+          failed = {k: v['result'] for k, v in results.items() if v['result'] not in ('success', 'skipped')}
+          assert not failed, failed
+          assert results['changes']['result'] == 'success'
+          PY

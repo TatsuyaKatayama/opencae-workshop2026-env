@@ -1,23 +1,21 @@
 name: Ubuntu 24.04 setup integration
 on:
+  workflow_call:
+    inputs:
+      architecture:
+        type: string
+        default: both
   workflow_dispatch:
     inputs:
       architecture:
         description: Native architecture to validate
         type: choice
         options: [amd64, arm64, both]
-        default: amd64
-  push:
-    branches: [main]
-    paths:
-      - setup/**
-      - tests/**
-      - scripts/**
-      - .github/workflows/ubuntu-setup.yml
+        default: both
 permissions:
   contents: read
 concurrency:
-  group: ubuntu-setup-${{ github.ref }}-${{ inputs.architecture || 'amd64' }}
+  group: ubuntu-setup-${{ github.ref }}-${{ inputs.architecture || 'both' }}
   cancel-in-progress: false
 jobs:
   native:
@@ -30,8 +28,6 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
-      - name: Source and control tests
-        run: scripts/check-source.sh
       - name: Prepare disposable runner for fresh Docker installation
         shell: bash
         run: |
@@ -49,7 +45,7 @@ jobs:
               if p.is_file() and 'download.docker.com' in p.read_text():
                   p.unlink()
           PY
-          # CI 専用 VM の未使用 SDK を除去し、ParaView のビルド領域を確保する。
+          # CI 専用 VM の未使用 SDK を除去し、CFD イメージの展開領域を確保する。
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
           df -h /
       - name: Install tools, build and validate CFD image

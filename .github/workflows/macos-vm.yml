@@ -1,0 +1,34 @@
+name: macOS Colima container boundary
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  container:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install prebuilt Colima and Docker tools
+        run: brew install --force-bottle colima docker docker-compose docker-buildx qemu
+      - name: Register Docker CLI plugins
+        run: |
+          mkdir -p "$HOME/.docker/cli-plugins"
+          ln -s /opt/homebrew/opt/docker-compose/bin/docker-compose "$HOME/.docker/cli-plugins/docker-compose"
+          ln -s /opt/homebrew/opt/docker-buildx/bin/docker-buildx "$HOME/.docker/cli-plugins/docker-buildx"
+      - name: Start real ARM Ubuntu VM using software emulation
+        timeout-minutes: 40
+        run: |
+          # Hosted ARM macOS lacks nested VZ. Lima >=2.2 falls back to QEMU TCG.
+          # Production remains VZ/virtiofs; this checks the host/VM/container boundary.
+          colima --profile opencae-workshop2026 start --activate=false \
+            --arch aarch64 --vm-type qemu --mount-type 9p --cpu-type max \
+            --cpus 2 --memory 2 --disk 20 --runtime docker --mount "$GITHUB_WORKSPACE:w"
+      - name: Verify production Docker connection and Compose file sharing
+        timeout-minutes: 10
+        run: bash scripts/ci/macos-container.sh
+      - name: Stop disposable VM
+        if: always()
+        timeout-minutes: 5
+        run: colima --profile opencae-workshop2026 stop || true

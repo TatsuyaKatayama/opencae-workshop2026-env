@@ -1,9 +1,6 @@
 name: macOS host tools and controls
 on:
-  push:
-    paths: [setup/macos/**, setup/config/**, setup/ubuntu2404/login_browser.py, scripts/**, tests/**, .github/workflows/macos.yml]
-  pull_request:
-    paths: [setup/macos/**, setup/config/**, setup/ubuntu2404/login_browser.py, scripts/**, tests/**, .github/workflows/macos.yml]
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read
