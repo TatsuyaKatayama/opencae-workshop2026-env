@@ -61,6 +61,13 @@ foreach ($empty in @('', $null)) {
 $temp = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
 [void][IO.Directory]::CreateDirectory($temp)
 try {
+    $hashFile=Join-Path $temp 'hash [literal] 日本語.txt'
+    [IO.File]::WriteAllText($hashFile,'abc',(New-Object Text.UTF8Encoding($false)))
+    Check ((Get-Sha256 -LiteralPath $hashFile) -eq 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad') 'SHA256 must match the known abc vector'
+    # ハンドルが解放され、直後に同じファイルを更新できる。
+    [IO.File]::WriteAllBytes($hashFile,[byte[]]@())
+    Check ((Get-Sha256 -LiteralPath $hashFile) -eq 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855') 'Empty file SHA256 must match'
+    Must-Fail { Get-Sha256 -LiteralPath (Join-Path $temp 'missing-file') }
     $path=Join-Path $temp 'environment.json'
     $script:config = [pscustomobject]@{
         schema=1; distroName='custom-env'; linuxUser='workshop'; projectPath='/home/workshop/opencae-workshop2026-env'
@@ -228,7 +235,7 @@ if ($env:OS -eq 'Windows_NT') {
     function New-CrewShortcuts { param($LauncherDirectory,$ConfigPath,$DistroName) $script:shortcuts++ }
     function Remove-OwnedCrewShortcuts { param($LauncherDirectory,$ConfigPath,$DistroName,[switch]$LegacyOnly) }
     function Invoke-WebRequest { param($Uri,$OutFile,[switch]$UseBasicParsing,$Proxy) [IO.File]::WriteAllText($OutFile,'fake-rootfs') }
-    function Get-FileHash { param($LiteralPath,$Algorithm) return [pscustomobject]@{Hash='8251e27ffff381a4af5f41dcb94d867de3e0d9774a9241908ab34555d99315ea'} }
+    function Get-Sha256 { param($LiteralPath) return '8251e27ffff381a4af5f41dcb94d867de3e0d9774a9241908ab34555d99315ea' }
     function Invoke-Wsl {
         param([string[]]$Arguments,[switch]$Capture)
         $script:setupCalls+=,@($Arguments)

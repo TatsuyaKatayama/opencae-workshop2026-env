@@ -84,12 +84,12 @@ param(
         $cache = Join-Path $env:LOCALAPPDATA 'OpenCAE\downloads'
         [void][IO.Directory]::CreateDirectory($cache)
         $archive = Join-Path $cache $image.file
-        if (!(Test-Path -LiteralPath $archive) -or (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ine $image.sha256) {
+        if (!(Test-Path -LiteralPath $archive) -or (Get-Sha256 -LiteralPath $archive) -ine $image.sha256) {
             $download = @{ Uri=($images.baseUrl+$image.file); OutFile=($archive+'.part'); UseBasicParsing=$true }
             if ($webProxy) { $download.Proxy=$webProxy }
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             Invoke-WebRequest @download
-            if ((Get-FileHash -LiteralPath ($archive+'.part') -Algorithm SHA256).Hash -ine $image.sha256) { throw 'Ubuntu rootfs SHA256 mismatch.' }
+            if ((Get-Sha256 -LiteralPath ($archive+'.part')) -ine $image.sha256) { throw 'Ubuntu rootfs SHA256 mismatch.' }
             Move-Item -LiteralPath ($archive+'.part') -Destination $archive -Force
         }
         [void][IO.Directory]::CreateDirectory($InstallLocation)

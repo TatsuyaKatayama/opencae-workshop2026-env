@@ -1,6 +1,20 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Get-Sha256 {
+    param([Parameter(Mandatory=$true)][string]$LiteralPath)
+    # PowerShell.Utility の自動読み込みに依存せず、5.1 / 7 共通の .NET API を使う。
+    $stream = [IO.File]::OpenRead($LiteralPath)
+    $algorithm = $null
+    try {
+        $algorithm = [Security.Cryptography.SHA256]::Create()
+        return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        if ($null -ne $algorithm) { $algorithm.Dispose() }
+        $stream.Dispose()
+    }
+}
+
 function Assert-Names {
     param([string]$DistroName, [string]$UserName)
     if ($DistroName -cnotmatch '^[A-Za-z][A-Za-z0-9_-]{0,63}$') { throw 'Invalid WSL name (letters, digits, _ and - only).' }
