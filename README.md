@@ -77,7 +77,7 @@ scripts/smoke-test.sh
 
 ## 検証と構成
 
-Ubuntu ARM64／amd64 の新規導入・CFD ビルド・計算・CPU 描画・動画生成は CI 成功済みです。Windows x64／ARM64 の PowerShell 5.1／7 で制御テストも成功しています。Windows 実機での通し確認と macOS 対応は残っています。検証済み範囲は [検証記録](docs/validation.md) を参照してください。
+Ubuntu ARM64／amd64 の新規導入・CFD ビルド・計算・CPU 描画・動画生成は CI 成功済みです。Windows x64／ARM64 の PowerShell 5.1／7 で制御テストも成功しています。Windows 版は利用者による実機確認を完了し、v1.0.0 としてリリースしました。macOS 対応は今後の予定です。検証済み範囲は [検証記録](docs/validation.md) を参照してください。
 
 OpenFOAM v2606 は公式 apt、ParaView 5.13.3 は OSMesa 対応版を使用します。amd64 は公式バイナリ、ARM64 はソースビルドです。OpenFOAM の採用 apt 版は **2606.0~rc2-1** であり、正式版ソースと同一とは扱いません。一般の Python 後処理は ParaView と別の venv です。
 
@@ -93,6 +93,7 @@ Bash が読み込む `*.env` は UTF-8（BOM なし）・LF 改行を維持し�
 
 ## 関連資料
 
+- [v1.0.0 リリースノート](docs/releases/v1.0.0.md)
 - [仕様書](PROJECT_SPEC.md)
 - [ビルド・キャッシュ・依存関係の更新](docs/image-build.md)
 - [セットアップのテスト計画](docs/setup-test-plan.md)

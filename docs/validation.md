@@ -116,3 +116,8 @@ CI では既存の共有 pipx 領域 `/opt/pipx` を継承すると AppArmor の
 ## 起動ファイルの整理と Allclean（2026-11-01）
 
 インストール先の PS1 と runtime を scripts 配下へ移し、直下の CMD を 1_StartBackend／2_StartCrew／3_StopCrew／9_Allclean に整理しました。更新時は旧レイアウトの既知ファイルだけを削除し、無関係な Windows ファイルは保持します。Allclean は登録 ID・保存先・Linux 識別記録を照合後、日本語で登録解除コマンドとデータ消失を表示し、DELETE 入力時だけ削除へ進みます。キャンセル・WhatIf は削除しません。実際の WSL 削除は開発機では行わず、モックで確認します。Windows CI ではテスト用 PS1 で CMD の実行・引数・終了コード、および Allclean の CMD 自体が消えるケースを確認します。
+
+
+## Windows 版 v1.0.0（2026-11-01）
+
+利用者から Windows 版の実機確認完了の報告を受け、v1.0.0 としてリリースします。[Windows CI 41287149106](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41287149106) で x64／ARM64 の PowerShell 5.1／7 が成功し、Allclean が自身の CMD を削除する場合の終了もダミー処理で確認しました。[ソース検査 41287149173](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41287149173)、[バックエンド導入 41287149125](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41287149125) も成功しています。過去の未確認事項は各時点の記録です。Proxy はプレビュー、macOS は未対応であり、実際の WSL 全削除は開発機で行っていません。
