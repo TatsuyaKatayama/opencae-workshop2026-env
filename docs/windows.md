@@ -32,9 +32,11 @@ Ubuntu の公式 rootfs を取得し、プロジェクトで固定した SHA256 
 
 デスクトップに環境名を付けた3つのショートカットが作成されます。
 
-1. **Kiro CLI Login**：当日最初に実行します。未認証なら端末で案内に従い、Windows の既定ブラウザーでログインします。デバイスコードを求められたら端末に表示されたコードを入力します。認証済みなら再ログインせず終了します。
+1. **Start Backend**：`1: Kiro CLI / 2: Codex / 3: OpenCode` を選択します。Kiro CLI・Codex は認証済みなら再ログインせず、未認証ならデバイス認証を開始します。Codex は ChatGPT の個人設定または組織設定でデバイスコード認証の許可が必要です。OpenCode は提供先を選んで API キーまたは OAuth で認証します。既に設定済みの提供先やローカルモデルを使う場合はログイン確認に `n` を入力できます。
 2. **Start Kiro Crew**：起動完了後に既定ブラウザーで Crew を開きます。起動済みならその画面を開きます。端末を閉じても Crew は動きます。
 3. **Stop Kiro Crew**：終了時に実行します。この環境の Crew のみ停止し、Docker や計算コンテナは停止しません。ブラウザーのタブは自分で閉じます。
+
+Crew の管理画面はバックエンドの認証前にも起動できます。バックエンドを変更した場合は Stop → Start で反映します。OpenCode の保存済み認証だけではモデル利用可否を断定できないため、Crew で提供先・モデルを選択し、会話を確認してください。KAS は使用しません。
 
 認証 URL を自動で開けない場合は、端末に表示された URL を手動でブラウザーに貼り付けます。URL とコードを共有ログへ保存しないでください。Crew の URL もアクセス権を含みます。エラー時は端末が残るので内容を確認します。
 
@@ -42,11 +44,25 @@ Ubuntu の公式 rootfs を取得し、プロジェクトで固定した SHA256 
 
 ## 失敗した場合の再開
 
-同じ取得元で、**初回と同じ環境名・ユーザー名・保存先・ポート**を指定して Setup.ps1 を再実行します。 Git clone の場合は先に `git pull origin main` で更新してください。再実行時は Windows 側の `scripts/smoke-test.sh` を既存 WSL 内へ反映し、内容の一致を確認してから検証へ進みます。手動コピーは不要です。作業データ・認証情報・イメージは削除しません。本スクリプトの設定、WSL 登録 ID・保存先、Linux 側の識別記録を照合して再開します。作成済みの別環境やデータのある保存先は上書きしません。インポート途中で登録が残らず保存先にデータだけがある場合は、安全のため自動再開せず内容確認を案内します。
+同じ取得元で、**初回と同じ環境名・ユーザー名・保存先・ポート**を指定して Setup.ps1 を再実行します。 Git clone の場合は配布対象ブランチを更新してください。現在のセットアップは新規環境用です。WSL 内と取得元の固定ツール版が異なる場合は更新せず停止するため、別の環境名・保存先で構築してください。再実行時は Windows 側の `scripts/smoke-test.sh` を既存 WSL 内へ反映し、内容の一致を確認してから検証へ進みます。手動コピーは不要です。作業データ・認証情報・イメージは削除しません。本スクリプトの設定、WSL 登録 ID・保存先、Linux 側の識別記録を照合して再開します。作成済みの別環境やデータのある保存先は上書きしません。インポート途中で登録が残らず保存先にデータだけがある場合は、安全のため自動再開せず内容確認を案内します。
 
 Ubuntu 内の工程記録は `~/.local/state/opencae-workshop2026/`、CFD のログ・結果はプロジェクト内の `work/` です。Crew の本人用ログは `~/.local/state/opencae-workshop2026/logs/crew.log` にあります。ログにはアクセス URL が含まれる可能性があるので共有しないでください。
 
 Windows／WSL の再起動後は **Start Kiro Crew** を再実行します。自動起動は設定しません。Windows から localhost へ接続できない場合は、WSL の localhost 転送や組織のファイアウォール設定を確認します。これらのグローバル設定はスクリプトで書き換えません。
+
+## 環境の削除
+
+専用 WSL の Linux ファイル・個人認証・Docker イメージ・計算結果をすべて削除します。必要な成果物は事前に退避してください。設定ファイルは環境名ごとに作成されています。
+
+```powershell
+$config = "$env:LOCALAPPDATA\OpenCAE\environments\ubuntu_of_kiro\environment.json"
+# 対象の確認のみ
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\RemoveEnvironment.ps1 -ConfigPath $config -WhatIf
+# 確認に同意した後に削除
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\RemoveEnvironment.ps1 -ConfigPath $config
+```
+
+`ubuntu_of_kiro` は作成した環境名へ置き換えます。WSL 登録 ID・保存先・Linux 側の識別記録を照合し、一致しない場合は停止します。削除成功後に、その環境の設定と所有が確認できたショートカットを削除します。Windows の clone／ZIP、他の WSL、共有ダウンロードキャッシュは保持します。保存先を再帰削除せず、未知のメタデータファイルも保持します。WSL 削除後の処理失敗時は、残った設定で同じコマンドを再実行できます。インポート途中など識別記録が未作成の環境は手動確認が必要です。
 
 ## Proxy プレビュー
 

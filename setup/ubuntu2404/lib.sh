@@ -75,7 +75,7 @@ download() {
     [[ "$url" == https://* && "$digest" =~ ^[0-9a-f]{64}$ ]] || die '配布設定が不正です。'
     if [[ -f "$dest" ]] && printf '%s  %s\n' "$digest" "$dest" | sha256sum --check --status; then return; fi
     curl --fail --silent --show-error --location --retry 3 --connect-timeout 30 --max-time 1200 "$url" -o "$dest.part"
-    printf '%s  %s\n' "$digest" "$dest.part" | sha256sum --check --status || die '取得ファイルの SHA256 が一致しません。'
+    printf '%s  %s\n' "$digest" "$dest.part" | sha256sum --check --status || die "取得ファイルの SHA256 が一致しません: $(basename -- "$dest")"
     mv -- "$dest.part" "$dest"
 }
 

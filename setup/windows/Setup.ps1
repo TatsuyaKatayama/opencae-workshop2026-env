@@ -56,6 +56,7 @@ param(
     $registration = Get-WslRegistration $DistroName
     if (Test-Path -LiteralPath $configPath) {
         $config = Read-Environment $configPath
+        if ($config.phase -eq 'Removing') { throw 'Environment removal is incomplete. Finish RemoveEnvironment.ps1 before creating a new environment.' }
         if ($config.linuxUser -ne $UserName -or $config.installLocation -ine $InstallLocation -or $config.port -ne $Port) { throw 'Existing setup options differ. Use the original options.' }
         if ($registration) {
             if (!$config.registrationId -and $config.phase -eq 'Importing') {
@@ -116,6 +117,9 @@ param(
         Assert-WslResult (Invoke-Wsl -Arguments @('-d',$DistroName,'-u',$UserName,'--exec','bash',"$linuxSource/setup/ubuntu2404/stage-project.sh",$linuxSource,$config.projectPath,$config.environmentId)) 'Project staging'
         $config.phase='Staged'; Save-Environment $configPath $config
     }
+    # 本セットアップは新規環境用。異なる固定版を持つ既存環境を暗黙に更新しない。
+    $versions = Invoke-Wsl -Capture -Arguments @('-d',$DistroName,'-u',$UserName,'--exec','cmp','--silent','--',"$linuxSource/setup/config/agents.env","$($config.projectPath)/setup/config/agents.env")
+    if ($versions.Code -ne 0) { throw 'Staged tool versions differ from this checkout. Create a new dedicated WSL environment with another -DistroName and -InstallLocation. The existing environment was kept.' }
     # Resume uses a staged copy, so git pull on Windows alone does not update it.
     $smokeSource = "$linuxSource/scripts/smoke-test.sh"
     $smokeTarget = "$($config.projectPath)/scripts/smoke-test.sh"
@@ -134,12 +138,13 @@ param(
     Assert-WslResult (Invoke-Wsl -Arguments $coreArgs) 'Ubuntu tool setup and CFD validation'
     $launchers = Join-Path $homeDirectory 'launchers'
     [void][IO.Directory]::CreateDirectory($launchers)
-    foreach ($file in @('Common.ps1','KiroLogin.ps1','StartCrew.ps1','StopCrew.ps1')) {
+    foreach ($file in @('Common.ps1','KiroLogin.ps1','StartBackend.ps1','StartCrew.ps1','StopCrew.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $launchers $file) -Force
     }
     New-CrewShortcuts $launchers $configPath $DistroName
+    Remove-OwnedCrewShortcuts $launchers $configPath $DistroName -LegacyOnly
     $config.phase='Ready'; Save-Environment $configPath $config
-    Write-Host 'セットアップ完了。デスクトップの「Kiro CLI Login」→「Start Kiro Crew」の順に起動してください。終了時は「Stop Kiro Crew」を使用してください。'
+    Write-Host 'セットアップ完了。デスクトップの「Start Backend」→「Start Kiro Crew」の順に起動してください。終了時は「Stop Kiro Crew」を使用してください。'
 }
 
 if ($MyInvocation.InvocationName -ne '.') {

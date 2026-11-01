@@ -31,11 +31,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\Setup.ps
 
 デスクトップに環境名付きで作成されたショートカットを使用します。
 
-1. **Kiro CLI Login**：未認証なら端末の案内に従い、既定ブラウザーで認証します。
+1. **Start Backend**：Kiro CLI・Codex・OpenCode を選び、端末の案内に従って認証します。Codex はデバイスコード認証、OpenCode は提供先ごとの認証です。
 2. **Start Kiro Crew**：Crew を起動し、ブラウザーで開きます。
 3. **Stop Kiro Crew**：終了時に Crew を停止します。Docker や計算コンテナは停止しません。
 
+Crew の管理画面はバックエンド未認証でも起動できます。バックエンド変更時は Stop → Start で反映します。OpenCode は提供先とモデルも画面で選びます。KAS は導入・選択しません。
+
 認証 URL を自動で開けない場合は端末の URL をブラウザーで開きます。認証コードや Crew のアクセス URL は共有しないでください。
+
+専用 WSL を削除する場合は、[Windows 手順の環境削除](docs/windows.md#環境の削除)を参照してください。
 
 ## Ubuntu から直接利用する場合
 
@@ -44,7 +48,7 @@ Ubuntu 24.04、systemd、sudo 権限を持つ通常ユーザーで、Linux フ�
 ```bash
 cd ~/opencae-workshop2026-env
 bash setup/ubuntu2404/setup.sh
-bash setup/ubuntu2404/kiro-login.sh
+bash setup/ubuntu2404/start-backend.sh --backend kiro
 bash setup/ubuntu2404/crew-start.sh
 bash setup/ubuntu2404/crew-stop.sh
 ```

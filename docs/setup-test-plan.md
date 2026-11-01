@@ -1,6 +1,6 @@
 # セットアップスクリプトのテスト計画
 
-更新日：2026-10-27。Ubuntu 24.04 の Bash スクリプト、制御テスト、ARM64／amd64 統合 CI を実装済み。Windows 用スクリプトとモックによる制御テストも実装済み。この文書の全項目が通過したという意味ではなく、実施結果は docs/validation.md と CI に記録する。
+更新日：2026-11-01。Ubuntu 24.04 の Bash スクリプト、制御テスト、ARM64／amd64 統合 CI を実装済み。Windows 用スクリプトとモックによる制御テストも実装済み。この文書の全項目が通過したという意味ではなく、実施結果は docs/validation.md と CI に記録する。
 
 ## 検証の分担
 
@@ -34,17 +34,23 @@ WSL2 CI はまずカーネル起動を含む能力確認を行い、対応環境
 | L05 | setup.sh | 再実行で版・設定・認証・成果物を保持し、完了工程とビルドキャッシュを利用 | 自動＋Linux＋WSL2 |
 | L06 | setup.sh | 通信失敗、ハッシュ不一致、容量不足、導入・ビルド失敗を成功扱いせず工程とログを報告 | 自動＋統合 |
 | L07 | setup.sh | 自 CPU 用 CFD イメージをビルドし、既存 smoke-test.sh で計算・描画・動画・保持を確認 | Linux＋WSL2 |
-| A01 | Login の PS1／Bash | 認証済みなら再認証せず終了。未認証ならデバイス認証と完了確認 | 自動＋手動 |
-| A02 | Login の PS1／Bash | URL・コードを案内し、Windows 既定ブラウザーを開く。自動取得不可時の案内を確認 | 自動＋手動 |
-| A03 | Login の PS1／Bash | キャンセル・期限切れ・通信失敗を区別して案内し、再試行可能。失敗端末を読める | 自動＋手動 |
-| A04 | Login の PS1／Bash | Crew と同じ Linux ユーザーに認証が保存され、別ユーザーへ混入しない | 手動 |
-| C01 | Start の PS1／Bash | 設定欠落、対象環境不在、Docker 停止、未認証を検出し、復旧操作を案内 | 自動＋WSL2 |
+| A01 | Start Backend の PS1／Bash | Kiro／Codex は認証済みなら再認証しない。OpenCode は提供先別認証とモデル確認、認証省略の選択を確認 | 自動＋手動 |
+| A02 | Start Backend の PS1／Bash | URL・コードを案内し、Windows 既定ブラウザーを開く。自動取得不可時の案内を確認 | 自動＋手動 |
+| A03 | Start Backend の PS1／Bash | キャンセル・期限切れ・通信失敗を区別して案内し、再試行可能。失敗端末を読める | 自動＋手動 |
+| A04 | Start Backend の PS1／Bash | Crew と同じ Linux ユーザーに認証が保存され、別ユーザーへ混入しない | 手動 |
+| C01 | Start の PS1／Bash | 設定欠落、対象環境不在、Docker 停止を検出して復旧操作を案内。モデル未認証でも管理画面は起動可能 | 自動＋WSL2 |
 | C02 | Start の PS1／Bash | 起動完了後にアクセス URL を開く。起動端末を閉じても稼働継続 | WSL2＋手動 |
 | C03 | Start の PS1／Bash | 起動済みなら二重起動せず画面を開く。同時起動要求でも重複しない | 自動＋WSL2 |
 | C04 | Start の PS1／Bash | 他プロセスのポート競合、起動失敗、タイムアウトを検出。無関係な画面を開かない | 自動＋WSL2 |
 | C05 | Start の PS1／Bash | localhost のみで待ち受け、トンネルなし。正しい環境の URL を開く | WSL2＋手動 |
 | T01 | Stop の PS1／Bash | 起動中は正常終了と停止確認、未起動は正常終了 | 自動＋WSL2 |
 | T02 | Stop の PS1／Bash | 停止失敗・タイムアウトを報告。別 Crew、Docker、計算コンテナを停止しない | 自動＋WSL2 |
+
+| B01 | Start Backend | Kiro／Codex／OpenCode を選択。Codex で Kiro 認証を要求しない。不正なバックエンドや失敗時に設定を更新しない | 自動＋手動 |
+| B02 | CLI 導入 | 両 CPU で同じ固定版のバイナリ・wheel を取得しハッシュ検証。Codex ACP と Node の lockfile 導入・再実行、ACP 初期応答を確認 | Linux CI |
+| R01 | RemoveEnvironment.ps1 | 登録 ID・保存先・識別記録の不一致、無関係な設定パスでは削除しない | 自動＋WSL2 |
+| R02 | RemoveEnvironment.ps1 | -WhatIf／確認拒否では削除・設定変更なし。unregister 失敗時はメタデータを保持 | 自動＋手動 |
+| R03 | RemoveEnvironment.ps1 | 対象のみ unregister。対応ショートカットと既知メタデータを削除し、他環境・Windows 配布元・未知ファイルを保持。途中再開も確認 | 自動＋WSL2 |
 
 ## 横断項目
 
@@ -56,7 +62,7 @@ WSL2 CI はまずカーネル起動を含む能力確認を行い、対応環境
 
 ## 最終受け入れ
 
-Windows ARM64／x64 それぞれで、配布取得 → Setup → Windows 再起動 → Kiro CLI Login → Start Kiro Crew → Crew から smoke-test.sh → 動画再生 → Stop Kiro Crew → 再度 Start を行い、認証・成果物の保持を確認する。clone／ZIP、既定／任意環境名、既定／任意保存先を検証ケースへ割り当て、どの組み合わせを確認したか記録する。
+Windows ARM64／x64 それぞれで、配布取得 → Setup → Windows 再起動 → Start Backend → Start Kiro Crew → Crew から smoke-test.sh → 動画再生 → Stop Kiro Crew → 再度 Start を行い、認証・成果物の保持を確認する。Kiro CLI／Codex／OpenCode の各バックエンドで実施し、OpenCode の提供先・モデルも記録する。削除検証は成果物を退避した専用環境で行う。clone／ZIP、既定／任意環境名、既定／任意保存先を検証ケースへ割り当て、どの組み合わせを確認したか記録する。
 
 記録にはテスト ID、対象 CPU、Windows／WSL／Ubuntu・ソフトの版、Git コミット、方法、成功／失敗／未実施、ログの場所を含める。実行していない項目を推測で成功にしない。Proxy プレビューは正式な通常経路の合格判定と分ける。
 

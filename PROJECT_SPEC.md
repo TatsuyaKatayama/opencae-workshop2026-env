@@ -155,11 +155,11 @@ Docker Engine、Linux 版 Docker CLI、Compose、Buildx は WSL 内に配置す�
 | 事前 | Setup.ps1 で専用の WSL2 Ubuntu 24.04 を新規作成し、Linux ユーザー、systemd、Docker Engine／CLI・Compose・Buildx、Kiro CLI・Crew・OpenCode・Codex CLI を導入・設定 |
 | 事前 | 配布ファイルを WSL の Linux ファイルシステムへ配置し、既存 Dockerfile からネイティブ CPU 用の CFD イメージをローカルビルドして確認 |
 | 事前 | Windows 側の設定・起動スクリプトを保存し、デスクトップに3つのショートカットを作成 |
-| 当日 | **Kiro CLI Login** を起動し、Windows のブラウザーで個人認証 |
+| 当日 | **Start Backend** を起動し、Windows のブラウザーで個人認証 |
 | 当日 | **Start Kiro Crew** を起動し、Windows のブラウザーから利用 |
 | 終了時 | **Stop Kiro Crew** を起動 |
 
-ソフト導入と個人認証を分離する。OpenCode／Codex CLI の提供先認証は必要な利用者が別途行う。Bash と PowerShell を主体とし、Ansible は導入しない。
+ソフト導入と個人認証を分離する。Start Backend で Kiro CLI／Codex／OpenCode を選び、同じ WSL ユーザーで提供先認証と Crew のバックエンド設定を行う。KAS は採用しない。Codex 用 ACP アダプターと専用 Node ランタイムを事前導入する。Bash と PowerShell を主体とし、Ansible は導入しない。
 
 ### 5.3 セットアップ処理の責務
 
@@ -192,7 +192,7 @@ Docker Engine、Linux 版 Docker CLI、Compose、Buildx は WSL 内に配置す�
 
 | ショートカット | Windows 側 | Ubuntu 側 |
 | --- | --- | --- |
-| Kiro CLI Login | KiroLogin.ps1 | kiro-login.sh |
+| Start Backend | StartBackend.ps1 | start-backend.sh |
 | Start Kiro Crew | StartCrew.ps1 | crew-start.sh |
 | Stop Kiro Crew | StopCrew.ps1 | crew-stop.sh |
 
@@ -200,11 +200,13 @@ Docker Engine、Linux 版 Docker CLI、Compose、Buildx は WSL 内に配置す�
 
 ### 5.6 認証・起動・停止
 
-- **Login**：認証状態を確認し、認証済みなら結果を表示して終了。未認証なら対話ログインを開始する。デバイス認証の URL とコードを案内し、Windows の既定ブラウザーを開く。URL の自動取得ができない場合は手動で開ける案内を残す。最後に認証状態を確認し、失敗時は端末を残す。
-- **Start**：設定、対象環境、Docker、認証状態を確認する。未認証なら Kiro CLI Login を案内する。Crew の起動完了を待ち、アクセス用 URL を Windows の既定ブラウザーで開く。起動済みなら同じ Crew の画面を開く。トンネルは有効にせず localhost のみで待ち受ける。
+- **Start Backend**：Kiro CLI／Codex／OpenCode を選択し、認証と Crew 設定を行う。Kiro CLI／Codex は認証済みなら再ログインしない。Codex はデバイスコード認証、OpenCode は提供先ごとの API キー／OAuth を使用する。OpenCode の認証可否は保存済み一覧だけで断定せず、ローカルモデル等は認証を省略可能とする。既知の認証 URL は Windows ブラウザーで開き、その他は手動操作を案内する。バックエンド変更後は Crew の Stop → Start を案内する。
+- **Start**：設定、対象環境、Docker を確認する。バックエンド未認証でも管理画面を起動できる。Crew の起動完了を待ち、アクセス用 URL を Windows の既定ブラウザーで開く。起動済みなら同じ Crew の画面を開く。トンネルは有効にせず localhost のみで待ち受ける。
 - **Stop**：本プロジェクトで管理する Crew を正常終了し、停止を確認する。未起動なら正常終了。Docker デーモンや計算コンテナ、別用途の Crew は停止しない。ブラウザーのタブは利用者が閉じる。
 - Crew は環境内の専用サービス名で管理し、Windows の起動端末を閉じても稼働を維持する。OS／WSL 起動時の自動起動は標準で有効にしない。
 - 認証は指定ユーザーの製品設定領域に保存する。アクセス URL を含み得るログは本人用権限で保管し、Git や CI artifact の対象にしない。失敗時は次の操作とログの場所を示す。
+
+環境削除は `RemoveEnvironment.ps1 -ConfigPath ...` で行う。WSL 登録 ID・保存先・Linux 識別記録を照合し、削除内容を表示して明示確認する。`-WhatIf` では削除・設定変更を行わない。対象 WSL のデータと対応する既知のメタデータ・ショートカットだけを削除し、他環境と Windows の配布元は保持する。
 
 ### 5.7 Proxy プレビュー
 
@@ -226,7 +228,7 @@ Docker 層の Dockerfile、Compose 定義、作業フォルダー構成は共通
 - ParaView＋OSMesa で GPU・DISPLAY・X サーバーを使用せず画像を生成し、ffmpeg で動画にできる。
 - MPI 2プロセスの結果が直列計算と許容誤差内で一致する。
 - 追加 Python パッケージを読み込め、foamlib でケースを読み、日本語ラベル付きグラフを保存できる。
-- Crew から Kiro CLI を使い、計算コンテナ内のコマンドを実行できる。OpenCode／Codex CLI は導入・単独起動を確認する。
+- Crew から Kiro CLI を使い、計算コンテナ内のコマンドを実行できる。OpenCode／Codex CLI も選択可能とし、個人認証と Crew 経由の会話はバックエンド別に手動確認する。
 - Windows の新規環境作成、任意名・任意保存先、ZIP／clone 両経路、途中再開、3つのショートカットによる認証・起動・停止を確認する。
 - Ubuntu 24.04 単体で Bash のセットアップ処理を利用できる。Proxy プレビューの検証状況を別途記録する。
 - コンテナを作り直しても作業フォルダーのデータが残る。
@@ -263,8 +265,8 @@ opencae-workshop2026-env/
 ├─ compose/
 │  └─ compose.yaml               # 受講者用。Dockerfile から build して起動
 ├─ setup/
-│  ├─ windows/                   # Setup.ps1 / KiroLogin.ps1 / StartCrew.ps1 / StopCrew.ps1
-│  ├─ ubuntu2404/                # setup.sh / kiro-login.sh / crew-start.sh / crew-stop.sh
+│  ├─ windows/                   # Setup.ps1 / StartBackend.ps1 / StartCrew.ps1 / StopCrew.ps1 / RemoveEnvironment.ps1
+│  ├─ ubuntu2404/                # setup.sh / start-backend.sh / crew-start.sh / crew-stop.sh
 │  ├─ macos/                     # macOS 用の導入処理
 │  └─ config/                    # Crew・CLI などの設定テンプレート
 ├─ scripts/

@@ -13,7 +13,6 @@ if [[ "${1:-}" == --status ]]; then
     note 'Crew は起動中です。'
     exit 0
 fi
-authenticated || die '先に Kiro CLI Login（kiro-login.sh）を実行してください。'
 source "$SETUP_ROOT/scripts/lib/common.sh"
 require_engine
 if ! systemctl --user is-active --quiet "$UNIT.service"; then

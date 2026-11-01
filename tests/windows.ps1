@@ -102,6 +102,17 @@ try {
     Check ($script:calls[-1][3] -eq 'workshop') 'Wrong WSL user'
     $script:auth=23
     Must-Fail { Invoke-CrewAction Login $path }
+    $before=$script:calls.Count
+    Invoke-CrewAction Backend $path -Backend codex
+    Check ($script:calls[-1] -contains '--backend' -and $script:calls[-1] -contains 'codex') 'Codex backend was not selected'
+    Check (($script:calls[-1] -join ' ') -match 'start-backend.sh') 'Wrong backend script'
+    Check (@($script:calls | Select-Object -Skip $before).Count -eq 2) 'Backend must use identity check and interactive call only'
+    Invoke-CrewAction Backend $path -Backend opencode -SkipAuthentication
+    Check ($script:calls[-1] -contains '--skip-auth') 'OpenCode preconfigured provider option missing'
+    Must-Fail { Invoke-CrewAction Backend $path -Backend codex -SkipAuthentication }
+    $script:failure='start-backend.sh'
+    Must-Fail { Invoke-CrewAction Backend $path -Backend kiro }
+    $script:failure=''
     $script:auth=0
     Invoke-CrewAction Start $path
     Check ($script:opened.Count -eq 1) 'Start must open browser'
@@ -120,6 +131,91 @@ try {
     $config.phase='Ready'; $config.projectPath='/tmp/other'; Save-Environment $path $config
     Must-Fail { Read-Environment $path }
 } finally { Remove-Item -LiteralPath $temp -Recurse -Force }
+& {
+    . (Join-Path $RepositoryRoot 'setup/windows/RemoveEnvironment.ps1') -ConfigPath 'unused'
+    $root=Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
+    $previousLocalAppData=$env:LOCALAPPDATA
+    $env:LOCALAPPDATA=$root
+    $script:removalRegistration=$null; $script:removalCalls=@(); $script:removalCode=0; $script:wrongMarker=$false
+    $script:removedShortcuts=0
+    function Get-WslRegistration { param($DistroName) return $script:removalRegistration }
+    function Remove-OwnedCrewShortcuts { param($LauncherDirectory,$ConfigPath,$DistroName) $script:removedShortcuts++ }
+    function Invoke-Wsl {
+        param([string[]]$Arguments,[switch]$Capture)
+        $script:removalCalls+=,@($Arguments)
+        if ($Arguments -contains 'cat') {
+            $marker=if ($script:wrongMarker) { 'wrong-id' } else { $script:removalConfig.environmentId }
+            return [pscustomobject]@{Code=0;Output=$marker;Error=''}
+        }
+        if ($Arguments -contains '--unregister') {
+            if ($script:removalCode -eq 0) { $script:removalRegistration=$null }
+            return [pscustomobject]@{Code=$script:removalCode;Output='';Error='mock removal result'}
+        }
+        throw 'Unexpected WSL command'
+    }
+    try {
+        $directory=Join-Path $root 'OpenCAE/environments/remove-test'
+        $file=Join-Path $directory 'environment.json'
+        $launchers=Join-Path $directory 'launchers'
+        [void][IO.Directory]::CreateDirectory($launchers)
+        $script:removalConfig=[pscustomobject]@{
+            schema=1;distroName='remove-test';linuxUser='workshop';projectPath='/home/workshop/opencae-workshop2026-env'
+            port=5476;environmentId=[guid]::NewGuid().ToString();phase='Ready';registrationId='owned-id';installLocation=$root
+        }
+        $script:removalRegistration=[pscustomobject]@{Id='owned-id';BasePath=$root;Version=2}
+        Save-Environment $file $script:removalConfig
+        Remove-WorkshopEnvironment -ConfigPath $file -WhatIf
+        Check (@($script:removalCalls | Where-Object { $_ -contains '--unregister' }).Count -eq 0) 'WhatIf must not unregister WSL'
+        Check ((Read-Environment $file).phase -eq 'Ready') 'WhatIf must not change metadata'
+        & {
+            function Get-Item { param($LiteralPath,[switch]$Force) return [pscustomobject]@{Attributes=[IO.FileAttributes]::ReparsePoint} }
+            Must-Fail { Remove-WorkshopEnvironment -ConfigPath $file -Confirm:$false }
+        }
+        $script:removalRegistration.Id='foreign-id'
+        Must-Fail { Remove-WorkshopEnvironment -ConfigPath $file -Confirm:$false }
+        $script:removalRegistration.Id='owned-id'
+        $script:removalRegistration.BasePath=Join-Path $root 'foreign-path'
+        Must-Fail { Remove-WorkshopEnvironment -ConfigPath $file -Confirm:$false }
+        $script:removalRegistration.BasePath=$root
+        $script:wrongMarker=$true
+        Must-Fail { Remove-WorkshopEnvironment -ConfigPath $file -Confirm:$false }
+        $script:wrongMarker=$false
+        Check (@($script:removalCalls | Where-Object { $_ -contains '--unregister' }).Count -eq 0) 'Identity failures must never unregister WSL'
+        $otherFile=Join-Path $root 'copied.json'
+        Save-Environment $otherFile $script:removalConfig
+        Must-Fail { Remove-WorkshopEnvironment -ConfigPath $otherFile -Confirm:$false }
+        $script:removalRegistration=$null
+        Must-Fail { Remove-WorkshopEnvironment -ConfigPath $file -Confirm:$false }
+        $script:removalRegistration=[pscustomobject]@{Id='owned-id';BasePath=$root;Version=2}
+        $script:removalCode=23
+        Must-Fail { Remove-WorkshopEnvironment -ConfigPath $file -Confirm:$false }
+        Check ((Read-Environment $file).phase -eq 'Removing') 'Removal failure must retain recovery metadata'
+        Check ($script:removedShortcuts -eq 0) 'Failed removal must keep shortcuts'
+        # WSL 削除後のメタデータ処理失敗からも安全に再開できる。
+        $script:removalRegistration=$null
+        [IO.File]::WriteAllText((Join-Path $launchers 'StartBackend.ps1'),'managed launcher')
+        $keep=Join-Path $directory 'user-file.txt'
+        [IO.File]::WriteAllText($keep,'keep')
+        Remove-WorkshopEnvironment -ConfigPath $file -Confirm:$false
+        Check (!(Test-Path -LiteralPath $file)) 'Successful removal must remove environment.json'
+        Check (Test-Path -LiteralPath $keep) 'Unknown metadata files must be kept'
+        Check ($script:removedShortcuts -eq 1) 'Successful removal must clean owned shortcuts'
+        Check (!(Test-Path -LiteralPath (Join-Path $launchers 'StartBackend.ps1'))) 'Managed launcher not removed'
+        Check (Test-Path -LiteralPath $root) 'Installation path must not be recursively removed'
+        # 正常な unregister も、指定した環境以外へは発行しない。
+        [void][IO.Directory]::CreateDirectory($launchers)
+        $script:removalConfig.phase='Ready'; Save-Environment $file $script:removalConfig
+        $script:removalRegistration=[pscustomobject]@{Id='owned-id';BasePath=$root;Version=2}
+        $script:removalCode=0
+        Remove-WorkshopEnvironment -ConfigPath $file -Confirm:$false
+        Check (($script:removalCalls[-1] -join ' ') -eq '--unregister remove-test') 'Only the owned WSL may be unregistered'
+        Check (!(Test-Path -LiteralPath $file)) 'Successful unregister must clean metadata'
+    } finally {
+        $env:LOCALAPPDATA=$previousLocalAppData
+        Remove-Item -LiteralPath $root -Recurse -Force
+    }
+}
+
 if ($env:OS -eq 'Windows_NT') {
     if ($env:TEST_EXPECTED_ARCH) { Check ((Get-WindowsCpu) -eq $env:TEST_EXPECTED_ARCH) 'Wrong native Windows CPU' }
     . (Join-Path $RepositoryRoot 'setup/windows/Setup.ps1')
@@ -130,6 +226,7 @@ if ($env:OS -eq 'Windows_NT') {
     function Get-SetupArchitecture { return 'amd64' }
     function Get-WslRegistration { param($DistroName) return $script:setupRegistration }
     function New-CrewShortcuts { param($LauncherDirectory,$ConfigPath,$DistroName) $script:shortcuts++ }
+    function Remove-OwnedCrewShortcuts { param($LauncherDirectory,$ConfigPath,$DistroName,[switch]$LegacyOnly) }
     function Invoke-WebRequest { param($Uri,$OutFile,[switch]$UseBasicParsing,$Proxy) [IO.File]::WriteAllText($OutFile,'fake-rootfs') }
     function Get-FileHash { param($LiteralPath,$Algorithm) return [pscustomobject]@{Hash='8251e27ffff381a4af5f41dcb94d867de3e0d9774a9241908ab34555d99315ea'} }
     function Invoke-Wsl {
@@ -163,8 +260,8 @@ if ($env:OS -eq 'Windows_NT') {
         $refreshes=@($script:setupCalls | Where-Object { $_ -contains 'install' -and $_[-1] -match '/scripts/smoke-test.sh$' })
         Check ($refreshes.Count -eq 2) 'Initial setup and resume must both refresh the validation script'
         Check ($refreshes[0][-2] -eq '/mnt/source with spaces/scripts/smoke-test.sh') 'Refresh must use the current Windows checkout'
-        Check (@($script:setupCalls | Where-Object { $_ -contains 'cmp' }).Count -eq 2) 'Copied validation script must be verified'
-        Check (Test-Path (Join-Path $temp 'OpenCAE/environments/test-new/launchers/KiroLogin.ps1')) 'Launchers were not copied'
+        Check (@($script:setupCalls | Where-Object { $_ -contains 'cmp' -and $_[-1] -match '/scripts/smoke-test.sh$' }).Count -eq 2) 'Copied validation script must be verified'
+        Check (Test-Path (Join-Path $temp 'OpenCAE/environments/test-new/launchers/StartBackend.ps1')) 'Launchers were not copied'
         $bad=@{}; foreach ($k in $options.Keys) { $bad[$k]=$options[$k] }; $bad.Port=5481
         Must-Fail { Invoke-WorkshopSetup @bad }
         # 別の設定記録がない登録済み環境を流用しない。

@@ -123,7 +123,8 @@ function Get-UserArguments {
 }
 
 function Invoke-CrewAction {
-    param([ValidateSet('Login','Start','Stop')][string]$Action, [string]$ConfigPath)
+    param([ValidateSet('Login','Backend','Start','Stop')][string]$Action, [string]$ConfigPath,
+          [ValidateSet('kiro','codex','opencode')][string]$Backend = 'kiro', [switch]$SkipAuthentication)
     $config = Read-Environment $ConfigPath
     if ($config.phase -ne 'Ready') { throw 'Setup is incomplete. Re-run Setup.ps1.' }
     Assert-Registration $config
@@ -132,6 +133,14 @@ function Invoke-CrewAction {
     Assert-WslResult $marker 'Environment identity check'
     if ($marker.Output.Trim() -ne $config.environmentId) { throw 'Environment identity mismatch.' }
     switch ($Action) {
+        Backend {
+            $arguments = (Get-UserArguments $config 'start-backend.sh') + @('--backend',$Backend,'--open-browser')
+            if ($SkipAuthentication) {
+                if ($Backend -ne 'opencode') { throw '-SkipAuthentication is only available for OpenCode local or preconfigured providers.' }
+                $arguments += '--skip-auth'
+            }
+            Assert-WslResult (Invoke-Wsl -Arguments $arguments) 'Backend setup'
+        }
         Login {
             $status = Invoke-Wsl -Capture -Arguments ((Get-UserArguments $config 'kiro-login.sh') + @('--status'))
             if ($status.Code -eq 0) { Write-Host 'Kiro CLI is already signed in.'; return }
@@ -163,12 +172,28 @@ function New-CrewShortcuts {
     $desktop = [Environment]::GetFolderPath('DesktopDirectory')
     $shell = New-Object -ComObject WScript.Shell
     $hostExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    foreach ($entry in @(@('Kiro CLI Login','KiroLogin.ps1'),@('Start Kiro Crew','StartCrew.ps1'),@('Stop Kiro Crew','StopCrew.ps1'))) {
+    foreach ($entry in @(@('Start Backend','StartBackend.ps1'),@('Start Kiro Crew','StartCrew.ps1'),@('Stop Kiro Crew','StopCrew.ps1'))) {
         $shortcut = $shell.CreateShortcut((Join-Path $desktop "$($entry[0]) ($DistroName).lnk"))
         $shortcut.TargetPath = $hostExe
         $shortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -File ' + (ConvertTo-NativeArgument (Join-Path $LauncherDirectory $entry[1])) + ' -ConfigPath ' + (ConvertTo-NativeArgument $ConfigPath) + ' -PauseOnError'
         $shortcut.WorkingDirectory = $LauncherDirectory
         $shortcut.Save()
+    }
+}
+
+function Remove-OwnedCrewShortcuts {
+    param([string]$LauncherDirectory,[string]$ConfigPath,[string]$DistroName,[switch]$LegacyOnly)
+    $desktop = [Environment]::GetFolderPath('DesktopDirectory')
+    $shell = New-Object -ComObject WScript.Shell
+    $hostExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $entries = @(@('Kiro CLI Login','KiroLogin.ps1'))
+    if (!$LegacyOnly) { $entries += @(@('Start Backend','StartBackend.ps1'),@('Start Kiro Crew','StartCrew.ps1'),@('Stop Kiro Crew','StopCrew.ps1')) }
+    foreach ($entry in $entries) {
+        $path = Join-Path $desktop "$($entry[0]) ($DistroName).lnk"
+        if (!(Test-Path -LiteralPath $path)) { continue }
+        $shortcut = $shell.CreateShortcut($path)
+        $arguments = '-NoProfile -ExecutionPolicy Bypass -File ' + (ConvertTo-NativeArgument (Join-Path $LauncherDirectory $entry[1])) + ' -ConfigPath ' + (ConvertTo-NativeArgument $ConfigPath) + ' -PauseOnError'
+        if ($shortcut.TargetPath -ieq $hostExe -and $shortcut.Arguments -ceq $arguments) { Remove-Item -LiteralPath $path }
     }
 }
 
