@@ -112,3 +112,6 @@ Bash が読み込む `*.env` は UTF-8（BOM なし）・LF 改行を維持し�
 - [第三者ソフトと取得元](THIRD_PARTY_NOTICES.md)
 
 独自のコード・設定・文書は Apache-2.0 です。第三者ソフトは各ライセンスに従います。
+
+
+CIの起動条件とOSごとの確認範囲は [CI構成](docs/ci.md)、CI整理と実VM境界テストの追加は [v2.1.0リリースノート](docs/releases/v2.1.0.md) を参照してください。

@@ -1,9 +1,6 @@
 name: Backend binary checks
 on:
-  push:
-    paths: [setup/**, tests/**, .github/workflows/backends.yml]
-  pull_request:
-    paths: [setup/**, tests/**, .github/workflows/backends.yml]
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read

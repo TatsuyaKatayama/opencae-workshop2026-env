@@ -1,15 +1,7 @@
 name: Native image smoke tests
 on:
+  workflow_call:
   workflow_dispatch:
-  push:
-    branches: [main, feature/macos-support]
-    paths:
-      - containers/**
-      - compose/**
-      - scripts/**
-      - examples/**
-      - versions.env
-      - .github/workflows/image.yml
 permissions:
   contents: read
 jobs:
