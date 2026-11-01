@@ -104,3 +104,10 @@ Windows 環境削除は登録・保存先・識別記録の照合、明示確認
 main の [Ubuntu 統合 CI 41261172219](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41261172219) は agents 工程の SHA256 不一致で停止しました。Kiro CLI 2.34.0 の両 CPU 用 ZIP の実ハッシュ、OpenCode 1.19.4／Codex 0.164.0 の GitHub リリース digest は記録と一致しました。一方、可変 URL `https://download.crew.kiro.dev/cli.sh` の内容が変わり、記録の `99e69080…` に対して取得物は `9111584c…` でした。今回からインストーラー自体も採用リリースの完全なコミット URL と SHA256 で固定し、ハッシュ不一致には対象ファイル名を表示します。ハッシュ検証は維持します。
 
 CI では既存の共有 pipx 領域 `/opt/pipx` を継承すると AppArmor の権限検査に失敗したため、Crew 用の pipx ホームと公開バイナリ先を指定ユーザーの領域に固定しました。最小 Ubuntu でも Node の展開と専用 AppArmor プロファイルを利用できるよう `xz-utils` と `apparmor` を前提パッケージへ明示しました。
+
+
+## WSL 稼働維持と停止直後のポート確認（2026-11-01）
+
+利用者の実機検証で、Codex 認証後のチャット送信時に Crew がオフラインとなり、systemd サービスだけでは WSL の稼働を維持できないことが報告されました。Windows 側に用意された暫定修正を取り込み、稼働維持を専用 Bash へ分離しました。通常の wsl.exe を Crew のサービスが稼働する間だけ非表示で維持し、HTTP 応答ではなくサービス状態を監視します。起動・停止用と別のロックで重複を防ぎ、サービス停止で終了します。
+
+起動前のポート確認に SO_REUSEADDR を適用し、HTTP サーバーと同様に TCP TIME_WAIT を許容します。実際の localhost ソケットを使う回帰テストで、LISTEN 中は拒否し、停止後の TIME_WAIT では通過することを確認しました。開発用 WSL ではインストールや CFD ビルドを行っていません。Python 38件、Linux 上の PowerShell 99項目が通過しました。WSL の実際のアイドル終了抑止とチャット継続は実機で再確認します。

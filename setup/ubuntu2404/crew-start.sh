@@ -19,6 +19,8 @@ if ! systemctl --user is-active --quiet "$UNIT.service"; then
     python3 - "$PORT" <<'PY'
 import socket, sys
 with socket.socket() as s:
+    # Match the HTTP server: TIME_WAIT after a clean stop is not a listener.
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         s.bind(('127.0.0.1', int(sys.argv[1])))
     except OSError:

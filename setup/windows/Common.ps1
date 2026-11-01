@@ -136,6 +136,15 @@ function Get-UserArguments {
     @('--distribution', $Config.distroName, '--user', $Config.linuxUser, '--exec', 'bash', "$($Config.projectPath)/setup/ubuntu2404/$Script")
 }
 
+function Start-CrewWslLifetime {
+    param($Config)
+    Assert-WslResult (Invoke-Wsl -Capture -Arguments @('-d',$Config.distroName,'-u',$Config.linuxUser,'--exec','test','-r',"$($Config.projectPath)/setup/ubuntu2404/crew-keepalive.sh")) 'WSL lifetime script check (run UpdateLaunchers.ps1 if missing)'
+    # 通常の wsl.exe 呼び出しを残し、WSL のアイドル終了を防ぐ。
+    $arguments = Get-UserArguments $Config 'crew-keepalive.sh'
+    $commandLine = ($arguments | ForEach-Object { ConvertTo-NativeArgument $_ }) -join ' '
+    Start-Process -FilePath 'wsl.exe' -ArgumentList $commandLine -WindowStyle Hidden
+}
+
 function Invoke-CrewAction {
     param([ValidateSet('Login','Backend','Start','Stop')][string]$Action, [string]$ConfigPath,
           [ValidateSet('kiro','codex','opencode')][string]$Backend = 'kiro', [switch]$SkipAuthentication)
@@ -171,6 +180,7 @@ function Invoke-CrewAction {
                 $uri.Host -notin @('localhost','127.0.0.1','[::1]') -or $uri.Port -ne $config.port -or $uri.UserInfo) {
                 throw 'Crew did not return a valid local access URL.'
             }
+            Start-CrewWslLifetime $config
             Start-Process -FilePath $url
             Write-Host 'Kiro Crew is running. Browser opened.'
         }
@@ -236,7 +246,35 @@ function Find-EnvironmentConfig {
 
 function Get-InstalledLauncherFiles {
     @('Common.ps1','KiroLogin.ps1','StartBackend.ps1','StartCrew.ps1','StopCrew.ps1','RemoveEnvironment.ps1','UpdateLaunchers.ps1',
-      'Start Backend.cmd','Start Kiro Crew.cmd','Stop Kiro Crew.cmd')
+      'Start Backend.cmd','Start Kiro Crew.cmd','Stop Kiro Crew.cmd',
+      'runtime/crew-start.sh','runtime/crew-keepalive.sh')
+}
+
+function Get-CrewRuntimeSource {
+    param([string]$SourceDirectory)
+    foreach ($candidate in @((Join-Path $SourceDirectory '../ubuntu2404'),(Join-Path $SourceDirectory 'runtime'))) {
+        if ((Test-Path -LiteralPath (Join-Path $candidate 'crew-start.sh') -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $candidate 'crew-keepalive.sh') -PathType Leaf)) {
+            return (Resolve-Path -LiteralPath $candidate).ProviderPath
+        }
+    }
+    throw 'Crew runtime scripts were not found. Run UpdateLaunchers.ps1 from the updated repository.'
+}
+
+function Sync-CrewRuntime {
+    param([string]$SourceDirectory,$Config)
+    $source = Get-CrewRuntimeSource $SourceDirectory
+    foreach ($name in @('crew-start.sh','crew-keepalive.sh')) {
+        $path = Join-Path $source $name
+        $converted = Invoke-Wsl -Capture -Arguments @('-d',$Config.distroName,'-u',$Config.linuxUser,'--exec','wslpath','-a','-u',$path)
+        Assert-WslResult $converted 'Runtime path conversion'
+        $linuxSource = $converted.Output.Trim()
+        if (!$linuxSource.StartsWith('/') -or $linuxSource -match '[\r\n]') { throw 'Invalid runtime source path.' }
+        Assert-WslResult (Invoke-Wsl -Arguments @('-d',$Config.distroName,'-u',$Config.linuxUser,'--exec','bash','-n',$linuxSource)) 'Runtime syntax check'
+        $target = "$($Config.projectPath)/setup/ubuntu2404/$name"
+        Assert-WslResult (Invoke-Wsl -Arguments @('-d',$Config.distroName,'-u',$Config.linuxUser,'--exec','install','-m','0755',$linuxSource,$target)) 'Runtime update'
+        Assert-WslResult (Invoke-Wsl -Arguments @('-d',$Config.distroName,'-u',$Config.linuxUser,'--exec','cmp','--silent','--',$linuxSource,$target)) 'Runtime update verification'
+    }
 }
 
 function Install-EnvironmentLaunchers {
@@ -252,10 +290,18 @@ function Install-EnvironmentLaunchers {
     foreach ($file in $files) {
         if (!(Test-Path -LiteralPath (Join-Path $SourceDirectory $file) -PathType Leaf)) { throw "Source script is missing: $file" }
     }
+    $runtimeSource = Get-CrewRuntimeSource $SourceDirectory
     Save-Environment $configPath $Config
     foreach ($file in $files) {
         $source = (Resolve-Path -LiteralPath (Join-Path $SourceDirectory $file)).ProviderPath
         $target = Join-Path $directory $file
+        if ([IO.Path]::GetFullPath($source) -ine [IO.Path]::GetFullPath($target)) { Copy-Item -LiteralPath $source -Destination $target -Force }
+    }
+    $runtimeTarget = Join-Path $directory 'runtime'
+    [void][IO.Directory]::CreateDirectory($runtimeTarget)
+    foreach ($name in @('crew-start.sh','crew-keepalive.sh')) {
+        $source = Join-Path $runtimeSource $name
+        $target = Join-Path $runtimeTarget $name
         if ([IO.Path]::GetFullPath($source) -ine [IO.Path]::GetFullPath($target)) { Copy-Item -LiteralPath $source -Destination $target -Force }
     }
     foreach ($entry in @(@('Start Backend.cmd','StartBackend.ps1'),@('Start Kiro Crew.cmd','StartCrew.ps1'),@('Stop Kiro Crew.cmd','StopCrew.ps1'))) {

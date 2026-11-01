@@ -198,13 +198,14 @@ WSL の **InstallLocation** に環境ごとの `environment.json`、PowerShell �
 
 新規インポート前は保存先を空に保つため、途中記録を `<InstallLocation>.opencae-state\environment.json` に置く。インポート後は保存先へ記録を移す。削除前にも回復記録を用意する。取得キャッシュと保存先の既定値はユーザープロファイル直下の OpenCAE を使用する。
 
-`UpdateLaunchers.ps1` は既存の WSL 登録・保存先・Linux 識別記録を照合し、Windows 用起動ファイルと設定だけを配置・更新する。旧 AppData／MSIX の記録から移行可能にし、曖昧な記録や別環境の設定は上書きしない。旧ショートカットは手動削除とする。
+`UpdateLaunchers.ps1` は既存の WSL 登録・保存先・Linux 識別記録を照合し、Windows 用起動ファイルと設定、WSL 内の Crew 起動・稼働維持スクリプトを配置・更新する。Docker／CFD の構築工程は実行しない。旧 AppData／MSIX の記録から移行可能にし、曖昧な記録や別環境の設定は上書きしない。旧ショートカットは手動削除とする。
 
 ### 5.6 認証・起動・停止
 
 - **Start Backend**：Kiro CLI／Codex／OpenCode を選択し、認証と Crew 設定を行う。Kiro CLI／Codex は認証済みなら再ログインしない。Codex はデバイスコード認証、OpenCode は提供先ごとの API キー／OAuth を使用する。OpenCode の認証可否は保存済み一覧だけで断定せず、ローカルモデル等は認証を省略可能とする。既知の認証 URL は Windows ブラウザーで開き、その他は手動操作を案内する。バックエンド変更後は Crew の Stop → Start を案内する。
 - **Start**：設定、対象環境、Docker を確認する。バックエンド未認証でも管理画面を起動できる。Crew の起動完了を待ち、アクセス用 URL を Windows の既定ブラウザーで開く。起動済みなら同じ Crew の画面を開く。トンネルは有効にせず localhost のみで待ち受ける。
 - **Stop**：本プロジェクトで管理する Crew を正常終了し、停止を確認する。未起動なら正常終了。Docker デーモンや計算コンテナ、別用途の Crew は停止しない。ブラウザーのタブは利用者が閉じる。
+- Windows の起動ランチャーは Crew 稼働中だけ通常の WSL 呼び出しを非表示で維持する。稼働維持はサービス状態を監視し、専用ロックで重複を防ぐ。停止で終了し、OS の自動起動にはしない。停止直後の TCP TIME_WAIT を別プロセスの待受と誤判定しない。
 - Crew は環境内の専用サービス名で管理し、Windows の起動端末を閉じても稼働を維持する。OS／WSL 起動時の自動起動は標準で有効にしない。
 - 認証は指定ユーザーの製品設定領域に保存する。アクセス URL を含み得るログは本人用権限で保管し、Git や CI artifact の対象にしない。失敗時は次の操作とログの場所を示す。
 

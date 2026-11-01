@@ -104,7 +104,13 @@ with (h/'calls').open('a') as f: f.write(json.dumps([name,*a])+'\\n')
 if name=='uname': print(os.environ['MOCK_ARCH'])
 elif name=='ps': print('systemd')
 elif name=='systemctl':
-    if 'is-active' in a: sys.exit(0 if (h/'active').exists() else 3)
+    if 'is-active' in a:
+        count_file=h/'active-checks'
+        count=int(count_file.read_text())+1 if count_file.exists() else 1
+        count_file.write_text(str(count))
+        active=(h/'active').exists()
+        if 'MOCK_ACTIVE_CHECKS' in os.environ: active=active and count<=int(os.environ['MOCK_ACTIVE_CHECKS'])
+        sys.exit(0 if active else 3)
     if 'stop' in a:
         if os.environ.get('MOCK_STOP_FAIL'): sys.exit(1)
         (h/'active').unlink(missing_ok=True)
@@ -149,7 +155,7 @@ elif name=='python3':
 elif name=='download-shim': sys.exit(0)
 '''
         for name in ('uname', 'ps', 'systemctl', 'systemd-run', 'kiro-cli', 'kirocrew',
-                     'opencode', 'codex', 'codex-acp', 'node', 'curl', 'docker', 'sudo', 'dpkg-query', 'tee', 'python3'):
+                     'opencode', 'codex', 'codex-acp', 'node', 'sleep', 'curl', 'docker', 'sudo', 'dpkg-query', 'tee', 'python3'):
             p = self.bin / name
             p.write_text(shim)
             p.chmod(0o755)
@@ -310,6 +316,51 @@ archive_binary opencode
         (self.bin/'codex-acp').unlink()
         self.assertNotEqual(self.run_script('start-backend.sh','--backend','codex').returncode,0)
         self.assertFalse((self.state/'backend').exists())
+
+    def test_keepalive_follows_service_without_blocking_start_stop_lock(self):
+        import fcntl
+        (self.home/'active').touch()
+        self.env['MOCK_ACTIVE_CHECKS']='2'
+        with (self.state/'crew.lock').open('w') as lock:
+            fcntl.flock(lock,fcntl.LOCK_EX)
+            p=self.run_script('crew-keepalive.sh')
+        self.assertEqual(p.returncode,0,p.stderr)
+        checks=[c for c in self.calls() if c[:4]==['systemctl','--user','is-active','--quiet']]
+        self.assertEqual(len(checks),3)
+        self.assertTrue(all(c[-1]==state.config(ROOT,5476)['unit']+'.service' for c in checks))
+        self.assertFalse(any(c[0] in ('curl','docker','kirocrew','systemd-run') for c in self.calls()))
+
+    def test_keepalive_duplicate_exits_and_inactive_crew_does_not_sleep(self):
+        import fcntl
+        with (self.state/'crew-lifetime.lock').open('w') as lock:
+            fcntl.flock(lock,fcntl.LOCK_EX)
+            p=self.run_script('crew-keepalive.sh')
+        self.assertEqual(p.returncode,0,p.stderr)
+        self.assertFalse(any('is-active' in c for c in self.calls()))
+        self.assertEqual(self.run_script('crew-keepalive.sh').returncode,0)
+        self.assertFalse(any(c[0]=='sleep' for c in self.calls()))
+
+    def test_port_probe_accepts_time_wait_and_rejects_live_listener(self):
+        import errno
+        import socket
+        source=(SCRIPTS/'crew-start.sh').read_text()
+        probe=source.split('python3 - "$PORT" <<\'PY\'\n',1)[1].split('\nPY',1)[0]
+        def check(port):
+            return subprocess.run(['/usr/bin/python3','-',str(port)],input=probe,text=True,capture_output=True,timeout=5)
+        with socket.socket() as listener:
+            listener.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+            listener.bind(('127.0.0.1',0)); listener.listen(1)
+            port=listener.getsockname()[1]
+            self.assertNotEqual(check(port).returncode,0)
+            with socket.create_connection(('127.0.0.1',port)) as client:
+                connection,_=listener.accept()
+                connection.close()
+                self.assertEqual(client.recv(1),b'')
+        with socket.socket() as plain:
+            with self.assertRaises(OSError) as error: plain.bind(('127.0.0.1',port))
+            self.assertEqual(error.exception.errno,errno.EADDRINUSE)
+        result=check(port)
+        self.assertEqual(result.returncode,0,result.stderr)
 
     def test_new_start_and_port_conflict(self):
         self.env['MOCK_PORT_BUSY'] = '1'

@@ -58,7 +58,7 @@ function Remove-WorkshopEnvironment {
     foreach ($path in @($ConfigPath,$installed,$pending) | Select-Object -Unique) {
         if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path }
     }
-    foreach ($path in @((Join-Path $directory 'launchers'),(Split-Path -Parent $pending))) {
+    foreach ($path in @((Join-Path $directory 'launchers'),(Join-Path $directory 'runtime'),(Join-Path $config.installLocation 'runtime'),(Split-Path -Parent $pending)) | Select-Object -Unique) {
         if ((Test-Path -LiteralPath $path) -and @(Get-ChildItem -LiteralPath $path -Force).Count -eq 0) { Remove-Item -LiteralPath $path }
     }
     Write-Host 'Environment removed. The Windows checkout and other WSL environments were kept.'

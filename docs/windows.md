@@ -58,7 +58,7 @@ C:\wsl_img\opencae-workshop2026\
 
 ## 既存環境の起動ファイルを更新する場合
 
-リポジトリを更新した後、次を実行します。WSL の新規作成、Docker／CFD の再構築は行いません。
+リポジトリを更新した後、次を実行します。WSL の新規作成、Docker／CFD の再構築は行いません。Windows の起動ファイルに加え、WSL 内の Crew 起動・稼働維持スクリプト2本も更新し、コピー内容を照合します。
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\UpdateLaunchers.ps1 `
@@ -73,7 +73,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\UpdateLa
 
 Ubuntu 内の工程記録は `~/.local/state/opencae-workshop2026/`、CFD のログ・結果はプロジェクト内の `work/` です。Crew の本人用ログは `~/.local/state/opencae-workshop2026/logs/crew.log` にあります。ログにはアクセス URL が含まれる可能性があるので共有しないでください。
 
-Windows／WSL の再起動後は **Start Kiro Crew.cmd** を再実行します。自動起動は設定しません。Windows から localhost へ接続できない場合は、WSL の localhost 転送や組織のファイアウォール設定を確認します。これらのグローバル設定はスクリプトで書き換えません。
+Windows／WSL の再起動後は **Start Kiro Crew.cmd** を再実行します。systemd サービスだけでは WSL がアイドル終了するため、ランチャーは Crew の起動中だけ非表示の WSL プロセスを維持します。Stop Kiro Crew.cmd で停止すると、この維持処理も終了します。維持プロセスは HTTP の一時的な不調では終了せず、専用ロックで重複を防ぎます。停止直後の TIME_WAIT は待受ポートと区別して確認します。自動起動は設定しません。Windows から localhost へ接続できない場合は、WSL の localhost 転送や組織のファイアウォール設定を確認します。これらのグローバル設定はスクリプトで書き換えません。
 
 ## 環境の削除
 

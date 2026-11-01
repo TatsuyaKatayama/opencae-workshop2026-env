@@ -97,7 +97,12 @@ try {
         if ($script:failure -and ($Arguments -join ' ') -match $script:failure) { $code=23 }
         return [pscustomobject]@{Code=$code;Output=$output;Error=''}
     }
-    function Start-Process { param([string]$FilePath) $script:opened+=,$FilePath }
+    $script:lifetimeCalls=@()
+    function Start-Process {
+        param([string]$FilePath,[string]$ArgumentList,[string]$WindowStyle)
+        if ($FilePath -eq 'wsl.exe') { $script:lifetimeCalls+=,[pscustomobject]@{Arguments=$ArgumentList;Style=$WindowStyle}; return }
+        $script:opened+=,$FilePath
+    }
     Invoke-CrewAction Login $path
     Check ($script:calls.Count -eq 2) 'Authenticated login must not launch another login'
     $script:auth=3
@@ -122,11 +127,21 @@ try {
     Invoke-CrewAction Start $path
     Check ($script:opened.Count -eq 1) 'Start must open browser'
     Check ($script:opened[0] -eq $script:url) 'Access URL changed'
+    Check ($script:lifetimeCalls.Count -eq 1) 'Start must keep WSL alive'
+    Check ($script:lifetimeCalls[0].Style -eq 'Hidden') 'Lifetime process must be hidden'
+    Check ($script:lifetimeCalls[0].Arguments -match 'custom-env.*workshop.*crew-keepalive.sh') 'Lifetime process must select the WSL and prevent duplicates'
     foreach ($url in @('https://evil.example/','http://localhost:9999/','http://user:pass@localhost:5476/')) {
         $script:url=$url
         Must-Fail { Invoke-CrewAction Start $path }
     }
     Check ($script:opened.Count -eq 1) 'Rejected URL was opened'
+    Check ($script:lifetimeCalls.Count -eq 1) 'Rejected URL must not start a WSL lifetime process'
+    $script:url='http://localhost:5476/?token=private-test'
+    $script:failure='crew-keepalive.sh'
+    Must-Fail { Invoke-CrewAction Start $path }
+    Check ($script:lifetimeCalls.Count -eq 1) 'Missing lifetime script must fail before starting the hidden process'
+    $script:failure=''
+
     Invoke-CrewAction Stop $path
     Check (($script:calls[-1] -join ' ') -match 'crew-stop.sh') 'Wrong stop command'
     $script:failure='crew-stop.sh'
@@ -253,6 +268,34 @@ try {
     }
 }
 
+& {
+    $runtimeTemp=Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
+    $source=Join-Path $runtimeTemp 'windows'
+    $runtime=Join-Path $runtimeTemp 'ubuntu2404'
+    [void][IO.Directory]::CreateDirectory($source); [void][IO.Directory]::CreateDirectory($runtime)
+    foreach ($name in @('crew-start.sh','crew-keepalive.sh')) { [IO.File]::WriteAllText((Join-Path $runtime $name),"#!/bin/sh`nexit 0`n") }
+    $script:runtimeCalls=@(); $script:runtimeFailure=$false
+    function Invoke-Wsl {
+        param([string[]]$Arguments,[switch]$Capture)
+        $script:runtimeCalls+=,@($Arguments)
+        $output=''; $code=0
+        if ($Arguments -contains 'wslpath') { $output='/mnt/source with spaces/' + [IO.Path]::GetFileName($Arguments[-1]) }
+        if ($script:runtimeFailure -and $Arguments -contains 'cmp') { $code=74 }
+        return [pscustomobject]@{Code=$code;Output=$output;Error=''}
+    }
+    try {
+        $runtimeConfig=[pscustomobject]@{distroName='runtime-test';linuxUser='workshop';projectPath='/home/workshop/opencae-workshop2026-env'}
+        Sync-CrewRuntime $source $runtimeConfig
+        $copies=@($script:runtimeCalls | Where-Object { $_ -contains 'install' })
+        Check ($copies.Count -eq 2) 'Updater must deploy startup and lifetime scripts'
+        Check ($copies[0][-1] -eq '/home/workshop/opencae-workshop2026-env/setup/ubuntu2404/crew-start.sh') 'Startup update must select the project script'
+        Check ($copies[1][-1] -eq '/home/workshop/opencae-workshop2026-env/setup/ubuntu2404/crew-keepalive.sh') 'Lifetime update must select the project script'
+        Check (@($script:runtimeCalls | Where-Object { $_ -contains 'cmp' }).Count -eq 2) 'Both runtime copies must be verified'
+        $script:runtimeFailure=$true
+        Must-Fail { Sync-CrewRuntime $source $runtimeConfig }
+    } finally { Remove-Item -LiteralPath $runtimeTemp -Recurse -Force }
+}
+
 if ($env:OS -eq 'Windows_NT') {
     # 一時インストール先へ実際の CMD を配置し、空白・日本語パスで起動する。
     $launcherTemp=Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ' 日本語 test')
@@ -265,12 +308,16 @@ if ($env:OS -eq 'Windows_NT') {
             schema=1;distroName='launcher-test';linuxUser='workshop';projectPath='/home/workshop/opencae-workshop2026-env'
             port=5476;environmentId=[guid]::NewGuid().ToString();phase='Ready';registrationId='launcher-id';installLocation=$launcherInstall
         }
+        $runtimeSource=Join-Path $launcherTemp 'ubuntu2404'
+        [void][IO.Directory]::CreateDirectory($runtimeSource)
+        foreach ($name in @('crew-start.sh','crew-keepalive.sh')) { [IO.File]::WriteAllText((Join-Path $runtimeSource $name),"#!/bin/sh`nexit 0`n") }
         $dummy='param([string]$ConfigPath)' + "`n" + '[IO.File]::WriteAllText(($PSCommandPath + ''.ran''),$ConfigPath)' + "`nexit 0`n"
         foreach ($name in (Get-InstalledLauncherFiles | Where-Object { $_ -like '*.ps1' })) {
             [IO.File]::WriteAllText((Join-Path $launcherSource $name),$dummy,(New-Object Text.UTF8Encoding($true)))
         }
         Install-EnvironmentLaunchers $launcherSource $launcherConfig
         $record=Join-Path $launcherInstall 'environment.json'
+        Check (Test-Path -LiteralPath (Join-Path $launcherInstall 'runtime/crew-keepalive.sh')) 'Runtime update payload must be staged'
         Check ((Read-Environment $record).environmentId -eq $launcherConfig.environmentId) 'Installed record identity changed'
         $commands=@(Get-ChildItem -LiteralPath $launcherInstall -Filter '*.cmd')
         Check ($commands.Count -eq 3) 'Three CMD launchers must be installed'

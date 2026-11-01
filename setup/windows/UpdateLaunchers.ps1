@@ -20,6 +20,7 @@ try {
     $marker = Invoke-Wsl -Capture -Arguments @('-d',$config.distroName,'-u','root','--exec','cat','/etc/opencae-environment-id')
     Assert-WslResult $marker 'Environment identity check'
     if ($marker.Output.Trim() -ne $config.environmentId) { throw 'Environment identity mismatch.' }
+    Sync-CrewRuntime $PSScriptRoot $config
     Install-EnvironmentLaunchers $PSScriptRoot $config
     Write-Host "Windows launchers updated: $($config.installLocation)"
     Write-Host 'Run Start Backend.cmd, then Start Kiro Crew.cmd. Old desktop shortcuts can be deleted manually.'
