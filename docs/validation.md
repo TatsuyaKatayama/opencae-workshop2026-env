@@ -1,8 +1,18 @@
 # 検証記録
 
-## 現在の状態
+## CI整理で追加した検証（2026-11-02）
 
-初期実装中です。講習向けの確認済みリリースではありません。
+[PR #4のCI](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41318993262) が成功しました。
+
+- macOS ARM64：Colimaの実Linux VM（QEMU／TCG、9p）から製品のDocker接続チェック、Ubuntu 24.04のCompose実行、日本語引数、双方向のファイル共有、UID、別コンテナでの永続化、終了コード42を確認。起動約3分、境界テスト約30秒。
+- Windows x64：実WSL2 Ubuntu 24.04を作成。PowerShell 5.1／7で製品の引数転送、日本語・空白・引用符、stdout／stderr、終了コード、プロジェクト配置、LF正規化、秘密ファイル除外、配置再実行が成功。
+- 既存のWindows x64／ARM64制御、Linux両CPUのCLI実導入・再導入・ACP、MacのCLI実導入・launchdも成功。
+
+製品スクリプト、Dockerfile、導入バージョンの変更はありません。MacのVZ／virtiofs、MacでのCFD全体、Windowsのrootfsインポート・systemd＋Docker＋Crew全体、ARM64の実WSL2、対話認証・ブラウザーは今回の追加CIの合格範囲に含みません。起動条件は [CI構成](ci.md) を参照してください。
+
+## 初期実装時の記録
+
+以下は初期実装時点の記録です。後続の検証結果は日付順の各項とリリースノートを参照してください。
 
 | 項目 | 状態 |
 | --- | --- |
@@ -21,12 +31,7 @@
 
 ## GitHub Actions
 
-- `Source checks`：push / pull request で構文、実行入口のテスト、Compose 定義を検査。
-- `Native image smoke tests`：main と codex/cfd-tools-bootstrap への関連変更の push、または手動実行で起動。
-- `ubuntu-24.04` は amd64、`ubuntu-24.04-arm` は ARM64 のネイティブランナー。Windows / WSL の検証を代替するものではない。
-- GitHub の Actions タブから実行を開き、`validation-ubuntu-24.04` / `validation-ubuntu-24.04-arm` artifact を取得する。
-- artifact の `work/build-*` にビルドログと実際の版、`work/smoke-*` に直列・MPI のログ、PNG、MP4、結果 JSON を保存する。失敗時も取得できる。
-- 成功判定は `result.json` の passed と各 job の完了を両方確認する。workflow の作成だけで実行済みとは扱わない。
+現在のイベント・ジョブ・artifactは [CI構成](ci.md) にまとめています。以下の旧ビルドログやソースビルドの記録は履歴であり、現在のARM64はOSMesaバイナリのロックから導入します。
 
 ## 正式リリース前
 

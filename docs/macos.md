@@ -111,6 +111,8 @@ ARM64 ParaView は `/opt/paraview` の専用 Python 3.12、一般後処理は `/
 
 標準 macOS CI はネストした VZ を前提にしません。標準 Bash 3.2 の構文・制御テスト、ダミーHTTPサービスを使った実launchdの起動・再利用・停止と、macOS バイナリの実導入・版確認・再導入・未認証状態・ACP 初期応答を確認します。`--agents-only` はこのためのモードで、Colima／CFD を構築しません。
 
+Colimaの境界CIでは、Apple Siliconのホスト型ランナーでQEMU／TCGの実Linux VMを起動し、製品の `require_engine` で専用Docker接続を検証します。Ubuntu 24.04コンテナをComposeで実行し、日本語引数、Mac→コンテナ→Macの共有ファイル、UID、別コンテナからの永続化、終了コードを確認します。CIのマウントは9p、製品の標準構成はVZ／virtiofsです。VZ／virtiofsやMac上のCFD全体を検証したという意味ではありません。CFDの計算・描画はLinux両CPUで別途確認します。実行条件は [CI構成](ci.md) を参照してください。
+
 Apple Silicon 実機では、Homebrew未導入からの自動導入（管理者入力・Command Line Toolsを含む）、Colima 新規作成と再起動、CFD ビルド・共通スモーク、Finder のダブルクリック、3種の認証、既定ブラウザー、Crew 経由の会話、Terminal を閉じた後の継続、Stop直後の再起動を確認してください。Mac の Proxy 自動設定は今回の実装対象外です。Windows の Proxy プレビューと同じ検証済み範囲とは扱いません。
 
 参考：[Colima 導入](https://colima.run/docs/installation/)・[Lima の virtiofs](https://lima-vm.io/docs/config/mount/)・[GitHub macOS ランナーの制約](https://docs.github.com/en/actions/reference/runners/github-hosted-runners#limitations-for-arm64-macos-runners)。

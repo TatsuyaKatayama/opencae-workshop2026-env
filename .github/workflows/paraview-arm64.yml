@@ -1,9 +1,6 @@
 name: ARM64 ParaView binary validation
 on:
   workflow_dispatch:
-  push:
-    branches: [feature/macos-support]
-    paths: [.github/workflows/paraview-arm64.yml]
 permissions:
   contents: read
 jobs:

@@ -118,3 +118,6 @@ Windows の rootfs 取得、Ubuntu 初期化、Linux セットアップ、Docker
 ## 検証範囲
 
 Ubuntu 24.04 の ARM64／amd64 では、実際の導入・CFD ビルド・計算・描画・動画生成まで CI が成功しています。Windows のテストは構文・設定・WSL 呼び出し制御・再開・ブラウザーへの URL 受け渡しをモックで確認します。Windows 実機での新規 WSL 作成、sudo パスワード入力、個人認証、ブラウザー表示は別途受け入れ確認が必要です。
+
+
+Windows x64のホスト型CIでは、実WSL2 Ubuntu 24.04を起動し、PowerShell 5.1／7から製品の `Invoke-Wsl` を使用します。日本語・空白・引用符を含む引数、stdout／stderr、終了コード、Windows側からLinuxユーザー領域への配置、LF正規化、秘密ファイル除外、配置の再実行を確認します。WSL1は合格扱いにしません。これは製品のrootfsインポート、systemd＋Docker＋Crewの通し構築やARM64上の実WSL2検証を代替しません。[CI構成](ci.md) に確認範囲を記載しています。
