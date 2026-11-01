@@ -369,8 +369,16 @@ exit 0
             try {
                 [void]$process.Start()
                 $stdout=$process.StandardOutput.ReadToEndAsync(); $stderr=$process.StandardError.ReadToEndAsync()
-                $process.StandardInput.WriteLine(''); $process.StandardInput.Close()
-                if (!$process.WaitForExit(15000)) { $process.Kill(); throw 'CMD launcher timed out' }
+                # StreamWriter の BOM が対話コマンドとして解釈されないよう生の改行を送る。
+                $process.StandardInput.BaseStream.WriteByte(13)
+                $process.StandardInput.BaseStream.WriteByte(10)
+                $process.StandardInput.BaseStream.Flush()
+                $process.StandardInput.Close()
+                if (!$process.WaitForExit(60000)) {
+                    & (Join-Path $env:SystemRoot 'System32/taskkill.exe') /PID $process.Id /T /F | Out-Null
+                    [void]$process.WaitForExit(10000)
+                    throw ('CMD launcher timed out: ' + $command.Name)
+                }
                 Check ($process.ExitCode -eq $expectedExit) ('CMD exit code was not preserved: ' + $stderr.Result)
             } finally { $process.Dispose() }
         }

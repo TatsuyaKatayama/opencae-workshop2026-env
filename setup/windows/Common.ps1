@@ -321,9 +321,9 @@ function Install-EnvironmentLaunchers {
     foreach ($entry in @(@('1_StartBackend.cmd','StartBackend.ps1'),@('2_StartCrew.cmd','StartCrew.ps1'),@('3_StopCrew.cmd','StopCrew.ps1'),@('9_Allclean.cmd','RemoveEnvironment.ps1'))) {
         $invocation = '"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\' + $entry[1] + '" -ConfigPath "%~dp0environment.json"'
         if ($entry[0] -eq '9_Allclean.cmd') {
-            # 自分の CMD が削除されても後続行を読み直さない。PS は結果表示のため残す。
-            $invocation = $invocation.Replace('-NoProfile ', '-NoProfile -NoExit ').Replace('%~dp0', '%opencae_install_dir%') + ' -InteractiveConfirmation'
-            $lines = @('@echo off','setlocal DisableDelayedExpansion','set "opencae_install_dir=%~dp0"','cd /d "%SystemRoot%"',('(' + $invocation + ') & exit /b'))
+            # 自分の CMD が削除されても、確認待ちと終了まで同じ行で実行する。
+            $invocation = $invocation.Replace('%~dp0', '%opencae_install_dir%') + ' -InteractiveConfirmation'
+            $lines = @('@echo off','setlocal DisableDelayedExpansion','set "opencae_install_dir=%~dp0"','cd /d "%SystemRoot%"',($invocation + ' & pause & exit /b'))
         } else {
             $lines = @('@echo off','setlocal DisableDelayedExpansion',$invocation,
                 'set "opencae_launcher_status=%errorlevel%"','echo.','pause','exit /b %opencae_launcher_status%')
