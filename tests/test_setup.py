@@ -14,6 +14,39 @@ state = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(state)
 
 
+config_spec = importlib.util.spec_from_file_location('config_files', SCRIPTS / 'config_files.py')
+config_files = importlib.util.module_from_spec(config_spec)
+config_spec.loader.exec_module(config_files)
+
+
+class ConfigFilesTest(unittest.TestCase):
+    def test_crlf_bom_and_quoted_values_are_normalized_without_changing_source(self):
+        with tempfile.TemporaryDirectory() as d:
+            source = Path(d)/'Windows 日本語 source.env'
+            source.write_bytes(b"\xef\xbb\xbfKEY=" + b'a'*64 + b"\r\nVERSION='1.2.3'\r\n")
+            original=source.read_bytes()
+            root=Path(d)/'linux'
+            for name in config_files.CONFIG_FILES:
+                p=root/name; p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(original)
+            config_files.normalize(root)
+            for name in config_files.CONFIG_FILES:
+                p=root/name
+                self.assertEqual(p.read_bytes(),b"KEY="+b'a'*64+b"\nVERSION='1.2.3'\n")
+                self.assertEqual(config_files.main(['compare',str(source),str(p)]),0)
+            self.assertEqual(source.read_bytes(),original)
+            target=root/'setup/config/agents.env'; target.write_text('DIFFERENT=1\n')
+            self.assertEqual(config_files.main(['compare',str(source),str(target)]),1)
+
+    def test_invalid_encoding_does_not_modify_any_config(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            for name in config_files.CONFIG_FILES:
+                p=root/name; p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(b'KEY=value\r\n')
+            bad=root/config_files.CONFIG_FILES[-1]; bad.write_bytes(b'KEY=bad\x00\n')
+            with self.assertRaises(ValueError):config_files.normalize(root)
+            self.assertEqual((root/'versions.env').read_bytes(),b'KEY=value\r\n')
+
+
 class StateTest(unittest.TestCase):
     def test_port_bounds_and_newline_rejected(self):
         for port in (0, 1023, 65536, 'abc'):

@@ -118,8 +118,10 @@ param(
         $config.phase='Staged'; Save-Environment $configPath $config
     }
     # 本セットアップは新規環境用。異なる固定版を持つ既存環境を暗黙に更新しない。
-    $versions = Invoke-Wsl -Capture -Arguments @('-d',$DistroName,'-u',$UserName,'--exec','cmp','--silent','--',"$linuxSource/setup/config/agents.env","$($config.projectPath)/setup/config/agents.env")
+    $normalizer = "$linuxSource/setup/ubuntu2404/config_files.py"
+    $versions = Invoke-Wsl -Capture -Arguments @('-d',$DistroName,'-u',$UserName,'--exec','python3',$normalizer,'compare',"$linuxSource/setup/config/agents.env","$($config.projectPath)/setup/config/agents.env")
     if ($versions.Code -ne 0) { throw 'Staged tool versions differ from this checkout. Create a new dedicated WSL environment with another -DistroName and -InstallLocation. The existing environment was kept.' }
+    Assert-WslResult (Invoke-Wsl -Arguments @('-d',$DistroName,'-u',$UserName,'--exec','python3',$normalizer,'normalize',$config.projectPath)) 'Normalize shared configuration line endings'
     # Resume uses a staged copy, so git pull on Windows alone does not update it.
     $smokeSource = "$linuxSource/scripts/smoke-test.sh"
     $smokeTarget = "$($config.projectPath)/scripts/smoke-test.sh"
