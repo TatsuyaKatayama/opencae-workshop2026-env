@@ -1,0 +1,48 @@
+name: Backend binary checks
+on:
+  push:
+    paths: [setup/**, tests/**, .github/workflows/backends.yml]
+  pull_request:
+    paths: [setup/**, tests/**, .github/workflows/backends.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: backends-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture: [arm64, amd64]
+    runs-on: ${{ matrix.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned host tools without Docker or CFD
+        run: bash setup/ubuntu2404/setup.sh --agents-only
+      - name: Verify unauthenticated backend configuration and ACP
+        shell: bash
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          test "$(kirocrew config get agent.acp_backend)" = kiro
+          kirocrew sandbox status --path "$(command -v kirocrew)"
+          kiro-cli --version
+          kirocrew --version
+          opencode --version
+          codex --version
+          for backend in kiro codex; do
+            status=0
+            bash setup/ubuntu2404/start-backend.sh --backend "$backend" --status || status=$?
+            test "$status" = 3
+          done
+          bash setup/ubuntu2404/start-backend.sh --backend opencode --skip-auth
+          python3 tests/probe_backends.py
+          test ! -d "$HOME/.kiro/crew/engines/kas"
+      - name: Verify repeat installation
+        shell: bash
+        run: |
+          bash setup/ubuntu2404/setup.sh --agents-only
+          export PATH="$HOME/.local/bin:$PATH"
+          test "$(kirocrew config get agent.acp_backend)" = opencode

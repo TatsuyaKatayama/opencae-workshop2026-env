@@ -23,19 +23,34 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\Setup.ps
   -InstallLocation C:\wsl_img\ubuntu_of_kiro
 ```
 
-専用 Ubuntu の新規作成、Docker・Kiro CLI・Crew・OpenCode・Codex CLI の導入、CFD イメージのローカルビルドと検証、デスクトップショートカット作成まで行います。既存 WSL は流用しません。詳細と Proxy プレビュー、途中再開は [Windows 手順](docs/windows.md) を参照してください。
+専用 Ubuntu の新規作成、Docker・Kiro CLI・Crew・OpenCode・Codex CLI の導入、CFD イメージのローカルビルドと検証、インストール先への起動スクリプト配置まで行います。既存 WSL は流用しません。詳細と Proxy プレビュー、途中再開は [Windows 手順](docs/windows.md) を参照してください。
 
 メモリ16GBを暫定基準とし、ビルドは標準2並列です。特に ARM64 の ParaView コンパイルは時間がかかるため、事前に完了してください。ビルド済みイメージは公開・配布しません。
 
 ## 当日の操作
 
-デスクトップに環境名付きで作成されたショートカットを使用します。
+WSL のインストール先（例 `C:\wsl_img\opencae-workshop2026`）に置かれた次のファイルをダブルクリックします。
 
-1. **Kiro CLI Login**：未認証なら端末の案内に従い、既定ブラウザーで認証します。
-2. **Start Kiro Crew**：Crew を起動し、ブラウザーで開きます。
-3. **Stop Kiro Crew**：終了時に Crew を停止します。Docker や計算コンテナは停止しません。
+1. **1_StartBackend.cmd**：Kiro CLI・Codex・OpenCode を選び、端末の案内に従って認証します。Codex はデバイスコード認証、OpenCode は提供先ごとの認証です。
+2. **2_StartCrew.cmd**：Crew を起動し、ブラウザーで開きます。
+3. **3_StopCrew.cmd**：終了時に Crew を停止します。Docker や計算コンテナは停止しません。
+
+Crew の管理画面はバックエンド未認証でも起動できます。バックエンド変更時は Stop → Start で反映します。OpenCode は提供先とモデルも画面で選びます。KAS は導入・選択しません。
+
+PS1 は保存先の `scripts` フォルダーにまとめます。環境を完全に削除する場合だけ **9_Allclean.cmd** を使用してください。対象とデータ消失の警告が表示され、`DELETE` と入力するまで削除しません。
 
 認証 URL を自動で開けない場合は端末の URL をブラウザーで開きます。認証コードや Crew のアクセス URL は共有しないでください。
+
+専用 WSL を削除する場合は、[Windows 手順の環境削除](docs/windows.md#環境の削除)を参照してください。
+
+既存環境を起動スクリプト方式へ更新する場合は、取得元のリポジトリで次を実行します。WSL・CFD の再構築は行いません。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\UpdateLaunchers.ps1 `
+  -DistroName opencae-workshop2026 -InstallLocation C:\wsl_img\opencae-workshop2026
+```
+
+設定はインストール先の `environment.json` に保存します。旧 AppData の記録は移行元として読み取り、デスクトップの古いショートカットは手動で削除してください。
 
 ## Ubuntu から直接利用する場合
 
@@ -44,7 +59,7 @@ Ubuntu 24.04、systemd、sudo 権限を持つ通常ユーザーで、Linux フ�
 ```bash
 cd ~/opencae-workshop2026-env
 bash setup/ubuntu2404/setup.sh
-bash setup/ubuntu2404/kiro-login.sh
+bash setup/ubuntu2404/start-backend.sh --backend kiro
 bash setup/ubuntu2404/crew-start.sh
 bash setup/ubuntu2404/crew-stop.sh
 ```
@@ -62,7 +77,7 @@ scripts/smoke-test.sh
 
 ## 検証と構成
 
-Ubuntu ARM64／amd64 の新規導入・CFD ビルド・計算・CPU 描画・動画生成は CI 成功済みです。Windows x64／ARM64 の PowerShell 5.1／7 で制御テストも成功しています。Windows 実機での通し確認と macOS 対応は残っています。検証済み範囲は [検証記録](docs/validation.md) を参照してください。
+Ubuntu ARM64／amd64 の新規導入・CFD ビルド・計算・CPU 描画・動画生成は CI 成功済みです。Windows x64／ARM64 の PowerShell 5.1／7 で制御テストも成功しています。Windows 版は利用者による実機確認を完了し、v1.0.0 としてリリースしました。macOS 対応は今後の予定です。検証済み範囲は [検証記録](docs/validation.md) を参照してください。
 
 OpenFOAM v2606 は公式 apt、ParaView 5.13.3 は OSMesa 対応版を使用します。amd64 は公式バイナリ、ARM64 はソースビルドです。OpenFOAM の採用 apt 版は **2606.0~rc2-1** であり、正式版ソースと同一とは扱いません。一般の Python 後処理は ParaView と別の venv です。
 
@@ -78,6 +93,7 @@ Bash が読み込む `*.env` は UTF-8（BOM なし）・LF 改行を維持し�
 
 ## 関連資料
 
+- [v1.0.0 リリースノート](docs/releases/v1.0.0.md)
 - [仕様書](PROJECT_SPEC.md)
 - [ビルド・キャッシュ・依存関係の更新](docs/image-build.md)
 - [セットアップのテスト計画](docs/setup-test-plan.md)

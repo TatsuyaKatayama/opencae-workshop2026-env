@@ -93,3 +93,31 @@ OpenFOAM の RC2 表記を解消するか、採用版を明示した仕様判断
 [Windows CI 40356116711](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/40356116711) で windows-2025（x64）と windows-11-arm の各 PowerShell 5.1／7 がすべて成功しました。CPU のネイティブ判定、構文、設定、対象登録照合、新規作成・再開の制御、認証状態分岐、起動終了コマンド、アクセス URL の検証を確認しました。WSL コマンド・ブラウザー・ダウンロードはモックであり、実際の環境作成や認証の成功を示すものではありません。Linux のソース検査と24件のテストも通過しています。
 
 Windows 実機での初回 WSL 構築、sudo パスワード入力、実際のショートカット作成・クリック、認証と既定ブラウザー、Windows 再起動後の復帰、Proxy 通信は未検証です。受講者向け正式リリース前の受け入れ項目として残します。操作手順は [Windows 手順](windows.md) を参照してください。
+
+
+## バックエンド選択と環境削除（2026-11-01）
+
+Start Backend で Kiro CLI／Codex／OpenCode を選び、同じ WSL ユーザーで認証と Crew 設定を行う実装を追加しました。Crew 0.11.1、OpenCode 1.19.5、Codex CLI 0.166.0、Crew が想定する `@agentclientprotocol/codex-acp` 2.5.0、専用 Node.js 24.11.1 を固定しました。KAS は取得せず、初期選択を Kiro CLI に明示します。バックエンド未認証でも管理画面の起動を許可します。
+
+Windows 環境削除は登録・保存先・識別記録の照合、明示確認、WhatIf、失敗後の再開を実装しました。開発用 WSL ではソフトを導入・更新せず、CFD のビルドや実際の WSL 削除も実行していません。Python 33件、Linux 上の PowerShell 81項目とソース検査が通過しました。[Windows CI 41262362383](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41262362383) で x64／ARM64 の PowerShell 5.1／7 が成功し、[Backend binary checks 41262362316](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41262362316) で両 CPU の新規バイナリ導入・再実行・Codex／OpenCode の ACP 初期応答が成功しました。認証と Crew 経由の会話、実機 WSL 削除は未検証です。
+
+main の [Ubuntu 統合 CI 41261172219](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41261172219) は agents 工程の SHA256 不一致で停止しました。Kiro CLI 2.34.0 の両 CPU 用 ZIP の実ハッシュ、OpenCode 1.19.4／Codex 0.164.0 の GitHub リリース digest は記録と一致しました。一方、可変 URL `https://download.crew.kiro.dev/cli.sh` の内容が変わり、記録の `99e69080…` に対して取得物は `9111584c…` でした。今回からインストーラー自体も採用リリースの完全なコミット URL と SHA256 で固定し、ハッシュ不一致には対象ファイル名を表示します。ハッシュ検証は維持します。
+
+CI では既存の共有 pipx 領域 `/opt/pipx` を継承すると AppArmor の権限検査に失敗したため、Crew 用の pipx ホームと公開バイナリ先を指定ユーザーの領域に固定しました。最小 Ubuntu でも Node の展開と専用 AppArmor プロファイルを利用できるよう `xz-utils` と `apparmor` を前提パッケージへ明示しました。
+
+
+## WSL 稼働維持と停止直後のポート確認（2026-11-01）
+
+利用者の実機検証で、Codex 認証後のチャット送信時に Crew がオフラインとなり、systemd サービスだけでは WSL の稼働を維持できないことが報告されました。Windows 側に用意された暫定修正を取り込み、稼働維持を専用 Bash へ分離しました。通常の wsl.exe を Crew のサービスが稼働する間だけ非表示で維持し、HTTP 応答ではなくサービス状態を監視します。起動・停止用と別のロックで重複を防ぎ、サービス停止で終了します。
+
+起動前のポート確認に SO_REUSEADDR を適用し、HTTP サーバーと同様に TCP TIME_WAIT を許容します。実際の localhost ソケットを使う回帰テストで、LISTEN 中は拒否し、停止後の TIME_WAIT では通過することを確認しました。開発用 WSL ではインストールや CFD ビルドを行っていません。Python 38件、Linux 上の PowerShell 99項目が通過しました。WSL の実際のアイドル終了抑止とチャット継続は実機で再確認します。
+
+
+## 起動ファイルの整理と Allclean（2026-11-01）
+
+インストール先の PS1 と runtime を scripts 配下へ移し、直下の CMD を 1_StartBackend／2_StartCrew／3_StopCrew／9_Allclean に整理しました。更新時は旧レイアウトの既知ファイルだけを削除し、無関係な Windows ファイルは保持します。Allclean は登録 ID・保存先・Linux 識別記録を照合後、日本語で登録解除コマンドとデータ消失を表示し、DELETE 入力時だけ削除へ進みます。キャンセル・WhatIf は削除しません。実際の WSL 削除は開発機では行わず、モックで確認します。Windows CI ではテスト用 PS1 で CMD の実行・引数・終了コード、および Allclean の CMD 自体が消えるケースを確認します。
+
+
+## Windows 版 v1.0.0（2026-11-01）
+
+利用者から Windows 版の実機確認完了の報告を受け、v1.0.0 としてリリースします。[Windows CI 41287149106](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41287149106) で x64／ARM64 の PowerShell 5.1／7 が成功し、Allclean が自身の CMD を削除する場合の終了もダミー処理で確認しました。[ソース検査 41287149173](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41287149173)、[バックエンド導入 41287149125](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41287149125) も成功しています。過去の未確認事項は各時点の記録です。Proxy はプレビュー、macOS は未対応であり、実際の WSL 全削除は開発機で行っていません。

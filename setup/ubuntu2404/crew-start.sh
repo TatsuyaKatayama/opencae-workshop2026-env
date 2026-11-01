@@ -13,13 +13,14 @@ if [[ "${1:-}" == --status ]]; then
     note 'Crew は起動中です。'
     exit 0
 fi
-authenticated || die '先に Kiro CLI Login（kiro-login.sh）を実行してください。'
 source "$SETUP_ROOT/scripts/lib/common.sh"
 require_engine
 if ! systemctl --user is-active --quiet "$UNIT.service"; then
     python3 - "$PORT" <<'PY'
 import socket, sys
 with socket.socket() as s:
+    # Match the HTTP server: TIME_WAIT after a clean stop is not a listener.
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         s.bind(('127.0.0.1', int(sys.argv[1])))
     except OSError:

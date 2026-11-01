@@ -60,7 +60,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          bash setup/ubuntu2404/kiro-login.sh --status
+          bash setup/ubuntu2404/start-backend.sh --backend kiro --status
           status=$?
           set -e
           test "$status" = 3
@@ -71,6 +71,7 @@ jobs:
           kirocrew --version
           opencode --version
           codex --version
+          python3 tests/probe_backends.py
           python3 - <<'PY'
           import json, os
           from pathlib import Path

@@ -104,7 +104,13 @@ with (h/'calls').open('a') as f: f.write(json.dumps([name,*a])+'\\n')
 if name=='uname': print(os.environ['MOCK_ARCH'])
 elif name=='ps': print('systemd')
 elif name=='systemctl':
-    if 'is-active' in a: sys.exit(0 if (h/'active').exists() else 3)
+    if 'is-active' in a:
+        count_file=h/'active-checks'
+        count=int(count_file.read_text())+1 if count_file.exists() else 1
+        count_file.write_text(str(count))
+        active=(h/'active').exists()
+        if 'MOCK_ACTIVE_CHECKS' in os.environ: active=active and count<=int(os.environ['MOCK_ACTIVE_CHECKS'])
+        sys.exit(0 if active else 3)
     if 'stop' in a:
         if os.environ.get('MOCK_STOP_FAIL'): sys.exit(1)
         (h/'active').unlink(missing_ok=True)
@@ -113,10 +119,14 @@ elif name=='kiro-cli':
     if a==['--version']: print('kiro-cli 2.34.0')
     elif 'whoami' in a: sys.exit(int(os.environ['MOCK_AUTH']))
 elif name=='kirocrew':
-    if a==['--version']: print('kirocrew 0.9.0')
+    if a==['--version']: print('kirocrew 0.11.1')
     elif a==['token']: print(os.environ.get('MOCK_URL','http://localhost:5476/?token=private-test-value'))
-elif name=='opencode': print('1.19.4')
-elif name=='codex': print('codex-cli 0.164.0')
+elif name=='opencode': print('1.19.5')
+elif name=='codex':
+    if a==['login','status']: sys.exit(int(os.environ.get('MOCK_CODEX_AUTH','0')))
+    elif a==['--version']: print('codex-cli 0.166.0')
+elif name=='codex-acp': pass
+elif name=='node': print('v24.11.1')
 elif name=='curl':
     if '-o' in a and a[a.index('-o')+1].endswith('.part'):
         pathlib.Path(a[a.index('-o')+1]).write_text('tampered')
@@ -145,10 +155,19 @@ elif name=='python3':
 elif name=='download-shim': sys.exit(0)
 '''
         for name in ('uname', 'ps', 'systemctl', 'systemd-run', 'kiro-cli', 'kirocrew',
-                     'opencode', 'codex', 'curl', 'docker', 'sudo', 'dpkg-query', 'tee', 'python3'):
+                     'opencode', 'codex', 'codex-acp', 'node', 'sleep', 'curl', 'docker', 'sudo', 'dpkg-query', 'tee', 'python3'):
             p = self.bin / name
             p.write_text(shim)
             p.chmod(0o755)
+
+    def prepare_mock_runtime(self):
+        runtime=self.home/'.local/share/opencae/node/24.11.1-arm64/bin'
+        runtime.mkdir(parents=True)
+        (runtime/'node').symlink_to(self.bin/'node')
+        (self.bin/'codex-acp').unlink()
+        entry=self.home/'.local/share/opencae/codex-acp/node_modules/@agentclientprotocol/codex-acp/dist/index.js'
+        entry.parent.mkdir(parents=True)
+        entry.write_text('// mock adapter')
 
     def run_script(self, name, *args):
         return subprocess.run(['bash', str(SCRIPTS / name), *args], env=self.env,
@@ -165,6 +184,30 @@ elif name=='download-shim': sys.exit(0)
         for args in (('--port', '65536'), ('--port', '2;touch BAD'), ('--proxy-config', '/tmp/x'), ('--unknown',)):
             self.assertNotEqual(self.run_script('setup.sh', *args).returncode, 0)
         self.assertFalse(any(c[0] in ('sudo', 'curl') for c in self.calls()))
+
+    def test_agents_only_never_installs_docker_or_builds_cfd(self):
+        self.prepare_mock_runtime()
+        p=self.run_script('setup.sh','--agents-only')
+        self.assertEqual(p.returncode,0,p.stderr)
+        self.assertTrue((self.state/'steps/agents').exists())
+        self.assertTrue((self.state/'steps/crew-config').exists())
+        self.assertFalse((self.state/'steps/docker').exists())
+        self.assertFalse(any(c[0] in ('docker','curl') for c in self.calls()))
+        self.assertFalse(any('build-image.sh' in ' '.join(c) or 'smoke-test.sh' in ' '.join(c) for c in self.calls()))
+        self.assertIn(['kirocrew','config','set','agent.acp_backend','kiro'],self.calls())
+        self.assertIn(['kirocrew','config','set','agent.kas_bundle','false'],self.calls())
+
+    def test_adapter_lock_pins_codex_and_all_downloads_have_integrity(self):
+        lock=json.loads((ROOT/'setup/config/codex-acp/package-lock.json').read_text())
+        packages=lock['packages']
+        self.assertEqual(packages['node_modules/@agentclientprotocol/codex-acp']['version'],'2.5.0')
+        self.assertEqual(packages['node_modules/@openai/codex']['version'],'0.166.0')
+        for name,package in packages.items():
+            if name:
+                self.assertTrue(package['resolved'].startswith('https://registry.npmjs.org/'))
+                self.assertTrue(package['integrity'].startswith('sha512-'))
+        for cpu in ('arm64','x64'):
+            self.assertIn('node_modules/@openai/codex-linux-'+cpu,packages)
 
     def test_unsupported_architecture(self):
         self.env['MOCK_ARCH'] = 'riscv64'
@@ -198,8 +241,8 @@ archive_binary opencode
                 lines = p.stdout.splitlines()
                 self.assertEqual(lines[0], arch)
                 self.assertTrue(lines[1].endswith(f'/2.34.0/kirocli-{cpu}-linux.zip'))
-                self.assertTrue(lines[3].endswith('/v1.19.4/'+code_name))
-                self.assertTrue(lines[5].endswith(f'/rust-v0.164.0/codex-{cpu}-unknown-linux-musl.tar.gz'))
+                self.assertTrue(lines[3].endswith('/v1.19.5/'+code_name))
+                self.assertTrue(lines[5].endswith(f'/rust-v0.166.0/codex-{cpu}-unknown-linux-musl.tar.gz'))
                 for digest in lines[2:7:2]:
                     self.assertRegex(digest, r'^[a-f0-9]{64}$')
                 self.assertEqual(lines[7:], [f'codex-{cpu}-unknown-linux-musl', 'opencode'])
@@ -228,12 +271,96 @@ archive_binary opencode
         self.assertNotIn('private-test-value', p.stderr)
         self.assertFalse(any(c[0] == 'systemd-run' for c in self.calls()))
 
-    def test_unauthenticated_start_does_not_spawn(self):
+    def test_unauthenticated_start_opens_dashboard_without_kiro_login(self):
         self.env['MOCK_AUTH'] = '1'
         p = self.run_script('crew-start.sh')
-        self.assertNotEqual(p.returncode, 0)
-        self.assertIn('Kiro CLI Login', p.stderr)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertTrue(any(c[0] == 'systemd-run' for c in self.calls()))
+        self.assertFalse(any(c[0] == 'kiro-cli' for c in self.calls()))
+
+    def test_backend_selection_does_not_require_kiro_for_codex(self):
+        self.env['MOCK_AUTH'] = '1'
+        p = self.run_script('start-backend.sh', '--backend', 'codex')
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual((self.state/'backend').read_text().strip(), 'codex')
+        self.assertIn(['kirocrew','config','set','agent.acp_backend','codex'], self.calls())
+        self.assertIn(['kirocrew','config','set','agent.kas_bundle','false'], self.calls())
+        self.assertFalse(any(c[0] == 'kiro-cli' for c in self.calls()))
         self.assertFalse(any(c[0] == 'systemd-run' for c in self.calls()))
+
+    def test_backend_status_never_changes_selection_or_logs_in(self):
+        for backend in ('kiro','codex'):
+            p = self.run_script('start-backend.sh','--backend',backend,'--status')
+            self.assertEqual(p.returncode, 0, p.stderr)
+        self.env['MOCK_AUTH']='1'; self.env['MOCK_CODEX_AUTH']='1'
+        for backend in ('kiro','codex'):
+            self.assertEqual(self.run_script('start-backend.sh','--backend',backend,'--status').returncode,3)
+        self.assertEqual(self.run_script('start-backend.sh','--backend','opencode','--status').returncode,4)
+        self.assertFalse((self.state/'backend').exists())
+        self.assertFalse(any(c[:3] == ['kirocrew','config','set'] for c in self.calls()))
+
+    def test_invalid_or_unauthenticated_backend_does_not_change_config(self):
+        self.env['MOCK_CODEX_AUTH']='1'
+        for args in (('--backend','kas'),('--backend','codex'),('--backend','kiro','--skip-auth')):
+            self.assertNotEqual(self.run_script('start-backend.sh',*args).returncode,0)
+        self.assertFalse(any(c[:3] == ['kirocrew','config','set'] for c in self.calls()))
+        self.assertFalse((self.state/'backend').exists())
+
+    def test_opencode_preconfigured_provider_can_skip_login(self):
+        p=self.run_script('start-backend.sh','--backend','opencode','--skip-auth')
+        self.assertEqual(p.returncode,0,p.stderr)
+        self.assertEqual((self.state/'backend').read_text().strip(),'opencode')
+        self.assertFalse(any(c[:3] == ['opencode','auth','login'] for c in self.calls()))
+
+    def test_missing_codex_adapter_aborts_before_setting_backend(self):
+        (self.bin/'codex-acp').unlink()
+        self.assertNotEqual(self.run_script('start-backend.sh','--backend','codex').returncode,0)
+        self.assertFalse((self.state/'backend').exists())
+
+    def test_keepalive_follows_service_without_blocking_start_stop_lock(self):
+        import fcntl
+        (self.home/'active').touch()
+        self.env['MOCK_ACTIVE_CHECKS']='2'
+        with (self.state/'crew.lock').open('w') as lock:
+            fcntl.flock(lock,fcntl.LOCK_EX)
+            p=self.run_script('crew-keepalive.sh')
+        self.assertEqual(p.returncode,0,p.stderr)
+        checks=[c for c in self.calls() if c[:4]==['systemctl','--user','is-active','--quiet']]
+        self.assertEqual(len(checks),3)
+        self.assertTrue(all(c[-1]==state.config(ROOT,5476)['unit']+'.service' for c in checks))
+        self.assertFalse(any(c[0] in ('curl','docker','kirocrew','systemd-run') for c in self.calls()))
+
+    def test_keepalive_duplicate_exits_and_inactive_crew_does_not_sleep(self):
+        import fcntl
+        with (self.state/'crew-lifetime.lock').open('w') as lock:
+            fcntl.flock(lock,fcntl.LOCK_EX)
+            p=self.run_script('crew-keepalive.sh')
+        self.assertEqual(p.returncode,0,p.stderr)
+        self.assertFalse(any('is-active' in c for c in self.calls()))
+        self.assertEqual(self.run_script('crew-keepalive.sh').returncode,0)
+        self.assertFalse(any(c[0]=='sleep' for c in self.calls()))
+
+    def test_port_probe_accepts_time_wait_and_rejects_live_listener(self):
+        import errno
+        import socket
+        source=(SCRIPTS/'crew-start.sh').read_text()
+        probe=source.split('python3 - "$PORT" <<\'PY\'\n',1)[1].split('\nPY',1)[0]
+        def check(port):
+            return subprocess.run(['/usr/bin/python3','-',str(port)],input=probe,text=True,capture_output=True,timeout=5)
+        with socket.socket() as listener:
+            listener.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+            listener.bind(('127.0.0.1',0)); listener.listen(1)
+            port=listener.getsockname()[1]
+            self.assertNotEqual(check(port).returncode,0)
+            with socket.create_connection(('127.0.0.1',port)) as client:
+                connection,_=listener.accept()
+                connection.close()
+                self.assertEqual(client.recv(1),b'')
+        with socket.socket() as plain:
+            with self.assertRaises(OSError) as error: plain.bind(('127.0.0.1',port))
+            self.assertEqual(error.exception.errno,errno.EADDRINUSE)
+        result=check(port)
+        self.assertEqual(result.returncode,0,result.stderr)
 
     def test_new_start_and_port_conflict(self):
         self.env['MOCK_PORT_BUSY'] = '1'
@@ -268,6 +395,7 @@ archive_binary opencode
                             '0'*64, str(dest)], env=self.env, capture_output=True, text=True)
         self.assertNotEqual(p.returncode, 0)
         self.assertIn('SHA256', p.stderr)
+        self.assertIn('archive', p.stderr)
         self.assertFalse(dest.exists())
 
     def test_zip_build_does_not_require_git_metadata(self):
@@ -330,6 +458,7 @@ archive_binary opencode
         p = self.bin / 'sha256sum'
         p.write_text('#!/bin/sh\ncat >/dev/null\nexit 0\n')
         p.chmod(0o755)
+        self.prepare_mock_runtime()
         self.env['MOCK_FAIL_SCRIPT'] = 'build-image.sh'
         result = self.run_script('setup.sh')
         self.assertEqual(result.returncode, 23, result.stderr)

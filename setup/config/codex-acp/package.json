@@ -1,0 +1,11 @@
+{
+  "name": "opencae-codex-acp",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "@agentclientprotocol/codex-acp": "2.5.0"
+  },
+  "overrides": {
+    "@openai/codex": "0.166.0"
+  }
+}

@@ -18,6 +18,15 @@ class BrowserTest(unittest.TestCase):
                      'https://view.awsapps.com.evil.example/device', 'https://user@view.awsapps.com/device'):
             self.assertIsNone(browser.authentication_url(text))
 
+    def test_provider_specific_browser_urls(self):
+        for backend,url in [('codex','https://auth.openai.com/codex/device'),
+                            ('opencode','https://github.com/login/device')]:
+            self.assertEqual(browser.authentication_url(url+'\n',backend),url)
+        for url in ('https://auth.openai.com.evil.test/device','https://auth.openai.com:444/device',
+                    'https://user:pass@auth.openai.com/device','https://github.com/login/device'):
+            self.assertIsNone(browser.authentication_url(url,'codex'))
+        self.assertIsNone(browser.authentication_url('https://unknown-provider.test/login','opencode'))
+
     def test_encoded_command_quotes_url_as_literal(self):
         url = "https://app.kiro.dev/signin?value=';echo BAD;#"
         command = browser.browser_command(url)

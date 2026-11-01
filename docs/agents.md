@@ -1,5 +1,9 @@
 # WSL の Kiro CLI / Crew
 
+## 現在の配布用セットアップ
+
+新規構築の操作は [Windows 手順](windows.md) または [Ubuntu 手順](../setup/ubuntu2404/README.md) を使用してください。Start Backend で Kiro CLI・Codex・OpenCode を選びます。Crew 0.11.1、OpenCode 1.19.5、Codex CLI 0.166.0、Codex ACP 2.5.0 を採用し、KAS は導入しません。以下は開発用 WSL の過去の手動確認記録であり、現在の配布版の実証結果とは区別します。
+
 ## 導入・確認した構成
 
 2026-10-25、このリポジトリを開発している WSL2 Ubuntu 24.04 / ARM64 に導入しました。取得情報は `setup/config/agents.env` に記録しています。ホスト側のアプリケーションであり、計算コンテナには含めません。
@@ -68,7 +72,7 @@ scripts/run-tool.sh blockMesh -help
 scripts/run-tool.sh pvpython --version
 ```
 
-Crew の会話からは、このリポジトリの絶対パスで `scripts/run-tool.sh` を指定できます。教材と成果物はリポジトリの `work/` に保存します。利用者による認証後、Crew の会話からバージョン確認と `scripts/smoke-test.sh` の実行に成功し、生成動画の再生も確認されました。Windows 新規環境での自動セットアップは未実装です。
+Crew の会話からは、このリポジトリの絶対パスで `scripts/run-tool.sh` を指定できます。教材と成果物はリポジトリの `work/` に保存します。利用者による認証後、Crew の会話からバージョン確認と `scripts/smoke-test.sh` の実行に成功し、生成動画の再生も確認されました。当時は Windows 新規環境での自動セットアップを実装していませんでした。
 
 ## 参照した公式手順
 

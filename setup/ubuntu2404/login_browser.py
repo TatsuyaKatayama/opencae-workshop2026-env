@@ -1,4 +1,4 @@
-"""Kiro の対話端末を維持し、認証 URL のみ Windows ブラウザーへ渡す。"""
+"""バックエンドの対話端末を維持し、許可した認証 URL だけをブラウザーへ渡す。"""
 import base64
 import os
 import pty
@@ -12,13 +12,24 @@ import tty
 from urllib.parse import urlsplit
 
 
-def authentication_url(text):
+COMMANDS = {
+    'kiro': ['kiro-cli', 'login', '--use-device-flow'],
+    'codex': ['codex', 'login', '--device-auth'],
+    'opencode': ['opencode', 'auth', 'login'],
+}
+
+
+def authentication_url(text, backend='kiro'):
     text = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', text)
     for url in re.findall(r'https://[^\s<>"\x1b]+', text):
         u = urlsplit(url)
         host = (u.hostname or '').lower()
-        if not u.username and (host in ('app.kiro.dev', 'view.awsapps.com', 'device.sso.amazonaws.com') or
-                               host.endswith('.awsapps.com')):
+        allowed = {
+            'kiro': host in ('app.kiro.dev', 'view.awsapps.com', 'device.sso.amazonaws.com') or host.endswith('.awsapps.com'),
+            'codex': host in ('auth.openai.com', 'chatgpt.com'),
+            'opencode': host in ('auth.openai.com', 'chatgpt.com', 'github.com'),
+        }.get(backend, False)
+        if not u.username and not u.password and u.port in (None, 443) and allowed:
             return url
     return None
 
@@ -30,12 +41,14 @@ def browser_command(url):
             base64.b64encode(code.encode('utf-16le')).decode()]
 
 
-def login():
+def login(backend='kiro'):
+    if backend not in COMMANDS:
+        sys.exit('Unsupported backend')
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         sys.exit('Interactive terminal required')
     pid, fd = pty.fork()
     if pid == 0:
-        os.execvp('kiro-cli', ['kiro-cli', 'login', '--use-device-flow'])
+        os.execvp(COMMANDS[backend][0], COMMANDS[backend])
     original = termios.tcgetattr(sys.stdin)
     opened = False
     buffer = ''
@@ -56,7 +69,7 @@ def login():
                 buffer = (buffer + data.decode(errors='replace'))[-32768:]
                 # 行の途中に分割された URL は次の出力を待つ。
                 complete = buffer.rsplit('\n', 1)[0] if '\n' in buffer else ''
-                url = authentication_url(complete)
+                url = authentication_url(complete, backend)
                 if url and not opened:
                     opened = True
                     try:
@@ -78,4 +91,4 @@ def login():
 
 
 if __name__ == '__main__':
-    sys.exit(login())
+    sys.exit(login(sys.argv[1] if len(sys.argv) == 2 else 'kiro'))

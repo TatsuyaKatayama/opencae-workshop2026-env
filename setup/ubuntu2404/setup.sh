@@ -4,13 +4,14 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
     cat <<'EOF'
-使用法: setup.sh [--port 5476] [--enable-proxy-preview --proxy-config FILE] [--plan]
+使用法: setup.sh [--port 5476] [--enable-proxy-preview --proxy-config FILE] [--plan] [--agents-only]
 Ubuntu 24.04 の通常ユーザーで実行します。sudo が必要です。
 既定は全工程（Docker・CLI・Crew 導入、CFD ローカルビルド・確認）。
 --plan は環境変更・通信なしで工程を表示します。
+--agents-only は CLI・Crew の事前導入のみ（Docker・CFD は対象外、主に CI 用）。
 EOF
 }
-port=5476; preview=0; proxy_file=''; plan=0
+port=5476; preview=0; proxy_file=''; plan=0; agents_only=0
 while (( $# )); do
     case "$1" in
         --help|-h) usage; exit 0 ;;
@@ -18,6 +19,7 @@ while (( $# )); do
         --enable-proxy-preview) preview=1; shift ;;
         --proxy-config) (( $# >= 2 )) || die '--proxy-config の値が必要です。'; proxy_file="$2"; shift 2 ;;
         --plan) plan=1; shift ;;
+        --agents-only) agents_only=1; shift ;;
         *) die "未対応の引数: $1" ;;
     esac
 done
@@ -28,7 +30,9 @@ platform
 source "$SETUP_ROOT/setup/config/agents.env"
 source "$SETUP_ROOT/setup/config/docker.env"
 if (( plan )); then
-    printf 'CPU=%s\nport=%s\n工程: prerequisites docker agents crew-config cfd-build cfd-check\n' "$ARCH" "$port"
+    if (( agents_only )); then steps='prerequisites agents crew-config'
+    else steps='prerequisites docker agents crew-config cfd-build cfd-check'; fi
+    printf 'CPU=%s\nport=%s\n工程: %s\n' "$ARCH" "$port" "$steps"
     exit 0
 fi
 [[ "$(ps -p 1 -o comm=)" == systemd ]] || die 'systemd が PID 1 の Ubuntu 24.04 が必要です。'
@@ -57,7 +61,7 @@ run_step() {
 
 prerequisites() {
     sudo --preserve-env=http_proxy,https_proxy,no_proxy,HTTP_PROXY,HTTPS_PROXY,NO_PROXY apt-get update
-    sudo --preserve-env=http_proxy,https_proxy,no_proxy,HTTP_PROXY,HTTPS_PROXY,NO_PROXY apt-get install -y ca-certificates curl gnupg unzip python3 python3-venv python3-pip git dbus-user-session uidmap libatomic1
+    sudo --preserve-env=http_proxy,https_proxy,no_proxy,HTTP_PROXY,HTTPS_PROXY,NO_PROXY apt-get install -y ca-certificates curl gnupg unzip xz-utils python3 python3-venv python3-pip git dbus-user-session uidmap libatomic1 apparmor
     sudo loginctl enable-linger "$(id -un)"
     sudo systemctl start "user@$(id -u).service"
 }
@@ -132,9 +136,13 @@ install_agents() {
         command -v kirocrew >/dev/null && die 'Crew の別バージョンが存在します。'
         download "$KIRO_CREW_INSTALLER_URL" "$KIRO_CREW_INSTALLER_SHA256" "$STATE/downloads/crew-install.sh"
         # 署名付きバージョンマニフェストの検証は公式インストーラーが担当する。
-        KIROCREW_ALLOW_SOURCE_BUILDS=0 sh "$STATE/downloads/crew-install.sh" --version "$KIRO_CREW_VERSION" --system-python
+        # CI 等の共有 PIPX_HOME を継承せず、常に指定ユーザーの領域を使う。
+        PIPX_HOME="$HOME/.local/share/opencae/pipx" PIPX_BIN_DIR="$HOME/.local/bin" \
+            PIPX_MAN_DIR="$HOME/.local/share/opencae/man" KIROCREW_ALLOW_SOURCE_BUILDS=0 \
+            sh "$STATE/downloads/crew-install.sh" --version "$KIRO_CREW_VERSION" --system-python --no-kas
         has_version kirocrew "$KIRO_CREW_VERSION" || die 'Crew の版を確認できません。'
     fi
+    bash "$SETUP_ROOT/setup/ubuntu2404/install-codex-acp.sh"
 }
 
 configure_crew() {
@@ -143,12 +151,27 @@ configure_crew() {
         kirocrew setup --agent-only </dev/null
         kirocrew config set dashboard.url "http://localhost:$port"
     fi
+    # Crew の新規既定値に依存せず、KAS を使用しない。
+    if [[ ! -f "$STATE/backend" ]]; then
+        kirocrew config set agent.acp_backend kiro
+    fi
+    kirocrew config set agent.kas_bundle false
+    # Ubuntu の userns 制限がある場合だけ専用プロファイルを導入する。
+    # 不要なカーネルでは公式コマンドが変更なしで正常終了する。
+    kirocrew sandbox install-profile --path "$(command -v kirocrew)"
     # 新しいログインシェルと非対話 PowerShell 起動の双方で PATH を確保する。
     local line='export PATH="$HOME/.local/bin:$PATH"'
     grep -Fqx "$line" "$HOME/.profile" 2>/dev/null || printf '\n%s\n' "$line" >> "$HOME/.profile"
 }
 
 run_step prerequisites prerequisites
+if (( agents_only )); then
+    run_step agents install_agents
+    run_step crew-config configure_crew
+    rm -f "$STATE/failed-step"
+    note 'CLI・Crew の事前導入が完了しました。Docker・CFD は未構築です。'
+    exit 0
+fi
 run_step docker install_docker
 run_step agents install_agents
 run_step crew-config configure_crew

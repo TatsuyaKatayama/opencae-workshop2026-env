@@ -1,6 +1,20 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Get-Sha256 {
+    param([Parameter(Mandatory=$true)][string]$LiteralPath)
+    # PowerShell.Utility の自動読み込みに依存せず、5.1 / 7 共通の .NET API を使う。
+    $stream = [IO.File]::OpenRead($LiteralPath)
+    $algorithm = $null
+    try {
+        $algorithm = [Security.Cryptography.SHA256]::Create()
+        return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        if ($null -ne $algorithm) { $algorithm.Dispose() }
+        $stream.Dispose()
+    }
+}
+
 function Assert-Names {
     param([string]$DistroName, [string]$UserName)
     if ($DistroName -cnotmatch '^[A-Za-z][A-Za-z0-9_-]{0,63}$') { throw 'Invalid WSL name (letters, digits, _ and - only).' }
@@ -8,9 +22,9 @@ function Assert-Names {
 }
 
 function ConvertTo-NativeArgument {
-    param([AllowEmptyString()][string]$Value)
+    param([AllowEmptyString()][string]$Value, [switch]$ForceQuote)
     # WSL のオプション・空白のない値には不要な引用符を付けない。
-    if ($Value.Length -gt 0 -and $Value -notmatch '[\s"]') { return $Value }
+    if (!$ForceQuote -and $Value.Length -gt 0 -and $Value -notmatch '[\s"]') { return $Value }
     # CommandLineToArgvW quoting, including backslashes before quotes/end.
     '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
 }
@@ -122,8 +136,18 @@ function Get-UserArguments {
     @('--distribution', $Config.distroName, '--user', $Config.linuxUser, '--exec', 'bash', "$($Config.projectPath)/setup/ubuntu2404/$Script")
 }
 
+function Start-CrewWslLifetime {
+    param($Config)
+    Assert-WslResult (Invoke-Wsl -Capture -Arguments @('-d',$Config.distroName,'-u',$Config.linuxUser,'--exec','test','-r',"$($Config.projectPath)/setup/ubuntu2404/crew-keepalive.sh")) 'WSL lifetime script check (run UpdateLaunchers.ps1 if missing)'
+    # 通常の wsl.exe 呼び出しを残し、WSL のアイドル終了を防ぐ。
+    $arguments = Get-UserArguments $Config 'crew-keepalive.sh'
+    $commandLine = ($arguments | ForEach-Object { ConvertTo-NativeArgument $_ }) -join ' '
+    Start-Process -FilePath 'wsl.exe' -ArgumentList $commandLine -WindowStyle Hidden
+}
+
 function Invoke-CrewAction {
-    param([ValidateSet('Login','Start','Stop')][string]$Action, [string]$ConfigPath)
+    param([ValidateSet('Login','Backend','Start','Stop')][string]$Action, [string]$ConfigPath,
+          [ValidateSet('kiro','codex','opencode')][string]$Backend = 'kiro', [switch]$SkipAuthentication)
     $config = Read-Environment $ConfigPath
     if ($config.phase -ne 'Ready') { throw 'Setup is incomplete. Re-run Setup.ps1.' }
     Assert-Registration $config
@@ -132,6 +156,14 @@ function Invoke-CrewAction {
     Assert-WslResult $marker 'Environment identity check'
     if ($marker.Output.Trim() -ne $config.environmentId) { throw 'Environment identity mismatch.' }
     switch ($Action) {
+        Backend {
+            $arguments = (Get-UserArguments $config 'start-backend.sh') + @('--backend',$Backend,'--open-browser')
+            if ($SkipAuthentication) {
+                if ($Backend -ne 'opencode') { throw '-SkipAuthentication is only available for OpenCode local or preconfigured providers.' }
+                $arguments += '--skip-auth'
+            }
+            Assert-WslResult (Invoke-Wsl -Arguments $arguments) 'Backend setup'
+        }
         Login {
             $status = Invoke-Wsl -Capture -Arguments ((Get-UserArguments $config 'kiro-login.sh') + @('--status'))
             if ($status.Code -eq 0) { Write-Host 'Kiro CLI is already signed in.'; return }
@@ -148,6 +180,7 @@ function Invoke-CrewAction {
                 $uri.Host -notin @('localhost','127.0.0.1','[::1]') -or $uri.Port -ne $config.port -or $uri.UserInfo) {
                 throw 'Crew did not return a valid local access URL.'
             }
+            Start-CrewWslLifetime $config
             Start-Process -FilePath $url
             Write-Host 'Kiro Crew is running. Browser opened.'
         }
@@ -158,18 +191,153 @@ function Invoke-CrewAction {
     }
 }
 
-function New-CrewShortcuts {
-    param([string]$LauncherDirectory,[string]$ConfigPath,[string]$DistroName)
-    $desktop = [Environment]::GetFolderPath('DesktopDirectory')
-    $shell = New-Object -ComObject WScript.Shell
-    $hostExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    foreach ($entry in @(@('Kiro CLI Login','KiroLogin.ps1'),@('Start Kiro Crew','StartCrew.ps1'),@('Stop Kiro Crew','StopCrew.ps1'))) {
-        $shortcut = $shell.CreateShortcut((Join-Path $desktop "$($entry[0]) ($DistroName).lnk"))
-        $shortcut.TargetPath = $hostExe
-        $shortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -File ' + (ConvertTo-NativeArgument (Join-Path $LauncherDirectory $entry[1])) + ' -ConfigPath ' + (ConvertTo-NativeArgument $ConfigPath) + ' -PauseOnError'
-        $shortcut.WorkingDirectory = $LauncherDirectory
-        $shortcut.Save()
+function Get-WorkshopUserRoot {
+    Join-Path ([Environment]::GetFolderPath('UserProfile')) 'OpenCAE'
+}
+
+function Get-PendingConfigPath {
+    param([string]$InstallLocation)
+    Join-Path ($InstallLocation.TrimEnd('\') + '.opencae-state') 'environment.json'
+}
+
+function Get-LegacyConfigPaths {
+    param([string]$DistroName)
+    $paths = @()
+    $legacy = "OpenCAE\environments\$DistroName\environment.json"
+    $paths += (Join-Path $env:LOCALAPPDATA $legacy)
+    # パッケージ化された端末から旧 Setup を実行した場合の物理保存先。
+    $packages = Join-Path $env:LOCALAPPDATA 'Packages'
+    if (Test-Path -LiteralPath $packages -PathType Container) {
+        foreach ($package in Get-ChildItem -LiteralPath $packages -Directory) {
+            $paths += (Join-Path $package.FullName "LocalCache\Local\$legacy")
+        }
     }
+    return $paths
+}
+
+function Find-EnvironmentConfig {
+    param([string]$DistroName,[string]$InstallLocation)
+    Assert-Names $DistroName 'workshop'
+    $paths = @()
+    if ($InstallLocation) {
+        $paths += (Join-Path $InstallLocation 'environment.json')
+        $paths += (Get-PendingConfigPath $InstallLocation)
+    }
+    $paths += @(Get-LegacyConfigPaths $DistroName)
+    $found = @()
+    foreach ($path in ($paths | Select-Object -Unique)) {
+        if (!(Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+        $config = Read-Environment $path
+        if ($config.distroName -ine $DistroName -or $config.phase -eq 'Removed') { continue }
+        if ($InstallLocation -and [IO.Path]::GetFullPath($config.installLocation).TrimEnd('\') -ine [IO.Path]::GetFullPath($InstallLocation).TrimEnd('\')) { continue }
+        # インストール先の記録を最優先とする。
+        if ($InstallLocation -and [IO.Path]::GetFullPath($path) -ieq [IO.Path]::GetFullPath((Join-Path $InstallLocation 'environment.json'))) { return $path }
+        $found += [pscustomobject]@{Path=$path;Config=$config}
+    }
+    if ($found.Count -eq 0) { return $null }
+    $first = $found[0].Config
+    foreach ($item in $found) {
+        if ($item.Config.environmentId -ne $first.environmentId -or $item.Config.registrationId -ne $first.registrationId) {
+            throw 'Multiple different environment records found. Specify -ConfigPath explicitly in UpdateLaunchers.ps1.'
+        }
+    }
+    return $found[0].Path
+}
+
+function Get-WindowsScriptFiles {
+    @('Common.ps1','KiroLogin.ps1','StartBackend.ps1','StartCrew.ps1','StopCrew.ps1','RemoveEnvironment.ps1','UpdateLaunchers.ps1')
+}
+
+function Get-LegacyLauncherFiles {
+    @(Get-WindowsScriptFiles) + @('Start Backend.cmd','Start Kiro Crew.cmd','Stop Kiro Crew.cmd','runtime/crew-start.sh','runtime/crew-keepalive.sh')
+}
+
+function Get-InstalledLauncherFiles {
+    @((Get-WindowsScriptFiles | ForEach-Object { 'scripts/' + $_ })) +
+        @('1_StartBackend.cmd','2_StartCrew.cmd','3_StopCrew.cmd','9_Allclean.cmd',
+          'scripts/runtime/crew-start.sh','scripts/runtime/crew-keepalive.sh')
+}
+
+function Get-CrewRuntimeSource {
+    param([string]$SourceDirectory)
+    foreach ($candidate in @((Join-Path $SourceDirectory '../ubuntu2404'),(Join-Path $SourceDirectory 'runtime'))) {
+        if ((Test-Path -LiteralPath (Join-Path $candidate 'crew-start.sh') -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $candidate 'crew-keepalive.sh') -PathType Leaf)) {
+            return (Resolve-Path -LiteralPath $candidate).ProviderPath
+        }
+    }
+    throw 'Crew runtime scripts were not found. Run UpdateLaunchers.ps1 from the updated repository.'
+}
+
+function Sync-CrewRuntime {
+    param([string]$SourceDirectory,$Config)
+    $source = Get-CrewRuntimeSource $SourceDirectory
+    foreach ($name in @('crew-start.sh','crew-keepalive.sh')) {
+        $path = Join-Path $source $name
+        $converted = Invoke-Wsl -Capture -Arguments @('-d',$Config.distroName,'-u',$Config.linuxUser,'--exec','wslpath','-a','-u',$path)
+        Assert-WslResult $converted 'Runtime path conversion'
+        $linuxSource = $converted.Output.Trim()
+        if (!$linuxSource.StartsWith('/') -or $linuxSource -match '[\r\n]') { throw 'Invalid runtime source path.' }
+        Assert-WslResult (Invoke-Wsl -Arguments @('-d',$Config.distroName,'-u',$Config.linuxUser,'--exec','bash','-n',$linuxSource)) 'Runtime syntax check'
+        $target = "$($Config.projectPath)/setup/ubuntu2404/$name"
+        Assert-WslResult (Invoke-Wsl -Arguments @('-d',$Config.distroName,'-u',$Config.linuxUser,'--exec','install','-m','0755',$linuxSource,$target)) 'Runtime update'
+        Assert-WslResult (Invoke-Wsl -Arguments @('-d',$Config.distroName,'-u',$Config.linuxUser,'--exec','cmp','--silent','--',$linuxSource,$target)) 'Runtime update verification'
+    }
+}
+
+function Install-EnvironmentLaunchers {
+    param([string]$SourceDirectory,$Config)
+    $directory = [IO.Path]::GetFullPath($Config.installLocation)
+    if (!(Test-Path -LiteralPath $directory -PathType Container)) { throw 'WSL installation directory is missing.' }
+    $configPath = Join-Path $directory 'environment.json'
+    if (Test-Path -LiteralPath $configPath) {
+        $previous = Read-Environment $configPath
+        if ($previous.environmentId -ne $Config.environmentId) { throw 'Installation directory belongs to another environment.' }
+    }
+    $files = @(Get-WindowsScriptFiles)
+    foreach ($file in $files) {
+        if (!(Test-Path -LiteralPath (Join-Path $SourceDirectory $file) -PathType Leaf)) { throw "Source script is missing: $file" }
+    }
+    $runtimeSource = Get-CrewRuntimeSource $SourceDirectory
+    Save-Environment $configPath $Config
+    $scriptTarget = Join-Path $directory 'scripts'
+    if ((Test-Path -LiteralPath $scriptTarget) -and ((Get-Item -LiteralPath $scriptTarget -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Script directory must not be a link or junction.' }
+    foreach ($path in @((Join-Path $scriptTarget 'runtime'),(Join-Path $directory 'runtime'))) {
+        if ((Test-Path -LiteralPath $path) -and ((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Runtime directory must not be a link or junction.' }
+    }
+    [void][IO.Directory]::CreateDirectory($scriptTarget)
+    foreach ($file in $files) {
+        $source = (Resolve-Path -LiteralPath (Join-Path $SourceDirectory $file)).ProviderPath
+        $target = Join-Path $scriptTarget $file
+        if ([IO.Path]::GetFullPath($source) -ine [IO.Path]::GetFullPath($target)) { Copy-Item -LiteralPath $source -Destination $target -Force }
+    }
+    $runtimeTarget = Join-Path $scriptTarget 'runtime'
+    [void][IO.Directory]::CreateDirectory($runtimeTarget)
+    foreach ($name in @('crew-start.sh','crew-keepalive.sh')) {
+        $source = Join-Path $runtimeSource $name
+        $target = Join-Path $runtimeTarget $name
+        if ([IO.Path]::GetFullPath($source) -ine [IO.Path]::GetFullPath($target)) { Copy-Item -LiteralPath $source -Destination $target -Force }
+    }
+    foreach ($entry in @(@('1_StartBackend.cmd','StartBackend.ps1'),@('2_StartCrew.cmd','StartCrew.ps1'),@('3_StopCrew.cmd','StopCrew.ps1'),@('9_Allclean.cmd','RemoveEnvironment.ps1'))) {
+        $invocation = '"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\' + $entry[1] + '" -ConfigPath "%~dp0environment.json"'
+        if ($entry[0] -eq '9_Allclean.cmd') {
+            # 自分の CMD が削除されても、確認待ちと終了まで同じ行で実行する。
+            $invocation = $invocation.Replace('%~dp0', '%opencae_install_dir%') + ' -InteractiveConfirmation'
+            $lines = @('@echo off','setlocal DisableDelayedExpansion','set "opencae_install_dir=%~dp0"','cd /d "%SystemRoot%"',($invocation + ' & pause & exit 0'))
+        } else {
+            $lines = @('@echo off','setlocal DisableDelayedExpansion',$invocation,
+                'set "opencae_launcher_status=%errorlevel%"','echo.','pause','exit /b %opencae_launcher_status%')
+        }
+        [IO.File]::WriteAllText((Join-Path $directory $entry[0]),(($lines -join "`r`n")+"`r`n"),[Text.Encoding]::ASCII)
+    }
+    # 新しい配置を作成した後に、旧レイアウトの既知ファイルだけを整理する。
+    foreach ($file in (Get-LegacyLauncherFiles)) {
+        $path = Join-Path $directory $file
+        if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path -Force }
+    }
+    $oldRuntime = Join-Path $directory 'runtime'
+    if ((Test-Path -LiteralPath $oldRuntime) -and @(Get-ChildItem -LiteralPath $oldRuntime -Force).Count -eq 0) { Remove-Item -LiteralPath $oldRuntime }
+
 }
 
 function Get-WindowsCpu {
