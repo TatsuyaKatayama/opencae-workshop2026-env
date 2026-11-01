@@ -36,6 +36,8 @@ bash setup/macos/setup.sh --port 5476 --cpu 4 --memory 8 --disk 100
 
 Homebrewの初回導入は対話端末で行います。管理者パスワード、実行確認、AppleのCommand Line Tools導入などを求められた場合は公式インストーラーの案内に従ってください。セットアップ全体をsudoで起動する必要はありません。既存のHomebrewは配置先・動作を確認して再利用し、初回導入用インストーラーを再実行しません。
 
+Homebrew導入後のPATHは各セットアップ・起動スクリプト内で設定するため、それらを使うためにシェル設定ファイルを手動編集する必要はありません。
+
 公式インストーラーは [homebrew.env](../setup/config/homebrew.env) のコミットURLとSHA256を確認してから実行します。取得失敗・ハッシュ不一致・導入失敗では後続工程へ進みません。非対話端末で未導入の場合は、Terminal／`0_Setup.command` での再実行を案内します。基盤の更新方針は [Homebrew公式手順](https://docs.brew.sh/Installation)も参照してください。
 
 同じ配置先・port・VM オプション・ツール版で再実行すると途中から再開できます。失敗した工程を記録し、既存データを削除しません。CFD の構築・検証は通常モードで毎回実行しますが、Docker のキャッシュを使用します。
@@ -73,6 +75,7 @@ Crew はユーザーの launchd job として起動します。plist は `~/Libr
 Stop は Colima と計算コンテナを停止しません。計算も含めて終了するときは、必要な処理が完了したことを確認してから次を実行します。
 
 ```bash
+source setup/macos/lib.sh
 colima --profile opencae-workshop2026 stop
 ```
 

@@ -158,3 +158,5 @@ Homebrew手動導入の前提を変更し、セットアップ内で既存の `/
 専用hello-world／SSH／Nginxテストは追加せず、通常セットアップで自動実行するOpenFOAMの共通スモークで今回のCFD利用経路を確認する方針にしました。実際のMacでのHomebrew初回導入（sudo入力・Command Line Toolsを含む）と、Colima経由の通し確認は引き続き未実施です。issue本文の変更やクローズ、develop／mainへのマージ・タグ・リリースは行っていません。
 
 ローカルの共通検査は74テスト（LinuxではmacOS実launchd専用の1件をスキップ）が通過しました。Homebrew制御の8件は既存環境・初回導入・非対話拒否・SHA256不一致・取得失敗・導入失敗・再実行・一時ファイル清掃をテスト用スクリプトで確認しています。
+
+実装コミット `317a39e` の [macOS CI 41315334930](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41315334930)、[ソース検査 41315334941](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41315334941)、[Linux両CPUの導入 41315334903](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41315334903)、[Windows両CPUの制御 41315334990](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41315334990) がすべて成功しました。初回Homebrew導入の制御はダミーインストーラー、実セットアップはランナーの既存Homebrewで確認しており、macOSを初期化してCLToolsから実導入した検証ではありません。公式インストーラーはCLTools未導入時にAppleのsoftwareupdateを使用し、必要に応じてxcode-selectのGUIへフォールバックします。
