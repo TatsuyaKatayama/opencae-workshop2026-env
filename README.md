@@ -23,23 +23,32 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\Setup.ps
   -InstallLocation C:\wsl_img\ubuntu_of_kiro
 ```
 
-専用 Ubuntu の新規作成、Docker・Kiro CLI・Crew・OpenCode・Codex CLI の導入、CFD イメージのローカルビルドと検証、デスクトップショートカット作成まで行います。既存 WSL は流用しません。詳細と Proxy プレビュー、途中再開は [Windows 手順](docs/windows.md) を参照してください。
+専用 Ubuntu の新規作成、Docker・Kiro CLI・Crew・OpenCode・Codex CLI の導入、CFD イメージのローカルビルドと検証、インストール先への起動スクリプト配置まで行います。既存 WSL は流用しません。詳細と Proxy プレビュー、途中再開は [Windows 手順](docs/windows.md) を参照してください。
 
 メモリ16GBを暫定基準とし、ビルドは標準2並列です。特に ARM64 の ParaView コンパイルは時間がかかるため、事前に完了してください。ビルド済みイメージは公開・配布しません。
 
 ## 当日の操作
 
-デスクトップに環境名付きで作成されたショートカットを使用します。
+WSL のインストール先（例 `C:\wsl_img\opencae-workshop2026`）に置かれた次のファイルをダブルクリックします。
 
-1. **Start Backend**：Kiro CLI・Codex・OpenCode を選び、端末の案内に従って認証します。Codex はデバイスコード認証、OpenCode は提供先ごとの認証です。
-2. **Start Kiro Crew**：Crew を起動し、ブラウザーで開きます。
-3. **Stop Kiro Crew**：終了時に Crew を停止します。Docker や計算コンテナは停止しません。
+1. **Start Backend.cmd**：Kiro CLI・Codex・OpenCode を選び、端末の案内に従って認証します。Codex はデバイスコード認証、OpenCode は提供先ごとの認証です。
+2. **Start Kiro Crew.cmd**：Crew を起動し、ブラウザーで開きます。
+3. **Stop Kiro Crew.cmd**：終了時に Crew を停止します。Docker や計算コンテナは停止しません。
 
 Crew の管理画面はバックエンド未認証でも起動できます。バックエンド変更時は Stop → Start で反映します。OpenCode は提供先とモデルも画面で選びます。KAS は導入・選択しません。
 
 認証 URL を自動で開けない場合は端末の URL をブラウザーで開きます。認証コードや Crew のアクセス URL は共有しないでください。
 
 専用 WSL を削除する場合は、[Windows 手順の環境削除](docs/windows.md#環境の削除)を参照してください。
+
+既存環境を起動スクリプト方式へ更新する場合は、取得元のリポジトリで次を実行します。WSL・CFD の再構築は行いません。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\UpdateLaunchers.ps1 `
+  -DistroName opencae-workshop2026 -InstallLocation C:\wsl_img\opencae-workshop2026
+```
+
+設定はインストール先の `environment.json` に保存します。旧 AppData の記録は移行元として読み取り、デスクトップの古いショートカットは手動で削除してください。
 
 ## Ubuntu から直接利用する場合
 

@@ -1,6 +1,6 @@
 # Windows / WSL のセットアップ
 
-Windows 11 ARM64／x64 が対象です。事前に専用の WSL2 Ubuntu 24.04 を作成し、当日はデスクトップのショートカットから認証・Crew の起動・停止を行います。Docker Desktop は使用しません。
+Windows 11 ARM64／x64 が対象です。事前に専用の WSL2 Ubuntu 24.04 を作成し、当日はインストール先の CMD ファイルから認証・Crew の起動・停止を行います。Docker Desktop は使用しません。
 
 ## 事前準備
 
@@ -24,33 +24,48 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\Setup.ps
   -Port 5476
 ```
 
-Ubuntu の公式 rootfs を取得し、プロジェクトで固定した SHA256 と照合して `wsl --import --version 2` で新規作成します。環境名は既定で `opencae-workshop2026`、保存先は `%LOCALAPPDATA%\OpenCAE\WSL\<環境名>`。既存環境は流用・削除しません。WSL 本体の初期導入や Windows の再起動が必要な場合は準備を案内して停止します。
+Ubuntu の公式 rootfs を取得し、プロジェクトで固定した SHA256 と照合して `wsl --import --version 2` で新規作成します。環境名は既定で `opencae-workshop2026`、保存先は `%USERPROFILE%\OpenCAE\WSL\<環境名>`。既存環境は流用・削除しません。WSL 本体の初期導入や Windows の再起動が必要な場合は準備を案内して停止します。
 
 指定ユーザー・sudo・systemd を初期化し、プロジェクトを `/home/<ユーザー>/opencae-workshop2026-env` にコピーします。Git 管理情報、認証領域、既存の `work/` はコピーしません。Linux のセットアップが Docker Engine／Compose／Buildx、Kiro CLI・Crew・OpenCode・Codex CLI を導入し、CFD イメージのローカルビルドと計算・描画・動画の確認を行います。ARM64 の ParaView ビルドは時間がかかるので、講習前に完了してください。進捗は端末へ表示します。
 
 ## 完了後と当日の操作
 
-デスクトップに環境名を付けた3つのショートカットが作成されます。
+WSL のインストール先に3つの CMD ファイルを配置します。ダブルクリックすると、同じフォルダーの PowerShell と `environment.json` を使って実行します。処理後は端末に結果を残します。
 
-1. **Start Backend**：`1: Kiro CLI / 2: Codex / 3: OpenCode` を選択します。Kiro CLI・Codex は認証済みなら再ログインせず、未認証ならデバイス認証を開始します。Codex は ChatGPT の個人設定または組織設定でデバイスコード認証の許可が必要です。OpenCode は提供先を選んで API キーまたは OAuth で認証します。既に設定済みの提供先やローカルモデルを使う場合はログイン確認に `n` を入力できます。
-2. **Start Kiro Crew**：起動完了後に既定ブラウザーで Crew を開きます。起動済みならその画面を開きます。端末を閉じても Crew は動きます。
-3. **Stop Kiro Crew**：終了時に実行します。この環境の Crew のみ停止し、Docker や計算コンテナは停止しません。ブラウザーのタブは自分で閉じます。
+1. **Start Backend.cmd**：`1: Kiro CLI / 2: Codex / 3: OpenCode` を選択します。Kiro CLI・Codex は認証済みなら再ログインせず、未認証ならデバイス認証を開始します。Codex は ChatGPT の個人設定または組織設定でデバイスコード認証の許可が必要です。OpenCode は提供先を選んで API キーまたは OAuth で認証します。既に設定済みの提供先やローカルモデルを使う場合はログイン確認に `n` を入力できます。
+2. **Start Kiro Crew.cmd**：起動完了後に既定ブラウザーで Crew を開きます。起動済みならその画面を開きます。端末を閉じても Crew は動きます。
+3. **Stop Kiro Crew.cmd**：終了時に実行します。この環境の Crew のみ停止し、Docker や計算コンテナは停止しません。ブラウザーのタブは自分で閉じます。
 
 Crew の管理画面はバックエンドの認証前にも起動できます。バックエンドを変更した場合は Stop → Start で反映します。OpenCode の保存済み認証だけではモデル利用可否を断定できないため、Crew で提供先・モデルを選択し、会話を確認してください。KAS は使用しません。
 
 認証 URL を自動で開けない場合は、端末に表示された URL を手動でブラウザーに貼り付けます。URL とコードを共有ログへ保存しないでください。Crew の URL もアクセス権を含みます。エラー時は端末が残るので内容を確認します。
 
-起動用 PS1 と環境設定は `%LOCALAPPDATA%\OpenCAE\environments\<環境名>` に保存します。元の ZIP 解凍先を移動・削除してもショートカットを使用できます。WSL の登録名・Linux ユーザー・プロジェクト配置先は記録済みなので、当日に再入力する必要はありません。
+Windows の設定と PS1・CMD は、WSL のインストール先にまとめて配置します。例：
 
-## ショートカットだけ更新する場合
-
-リポジトリを更新した後、次を実行すると、保存済みの起動スクリプトとショートカットだけを更新できます。Docker／CFD の再構築や WSL の作成は行いません。
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\RefreshShortcuts.ps1
+```text
+C:\wsl_img\opencae-workshop2026\
+  ext4.vhdx
+  environment.json
+  Start Backend.cmd
+  Start Kiro Crew.cmd
+  Stop Kiro Crew.cmd
+  Common.ps1
+  StartBackend.ps1 / StartCrew.ps1 / StopCrew.ps1
+  RemoveEnvironment.ps1 / UpdateLaunchers.ps1
 ```
 
-既定以外の登録名では `-DistroName <登録名>`、設定を直接指定する場合は `-ConfigPath <environment.json>` を追加します。リンクは Unicode 対応の Windows Shell API で毎回新しく作成し、起動先・引数を保存後に照合します。すべて絶対パスで渡すため、作業フォルダー欄は空にします。PowerShell は `-NoExit` で起動するため、結果を確認したら端末を閉じてください。OneDrive でデスクトップを同期する場合、別 PC のショートカットが同期されることがあるため、利用する PC で更新してください。
+元の clone／ZIP 解凍先を移動しても、配置済みのファイルから起動できます。設定や起動ファイルを AppData に新規保存せず、ショートカットも作成しません。パッケージ化された端末で AppData が別の場所へリダイレクトされる問題を避けます。認証情報は引き続き WSL 内のユーザー領域に保存します。
+
+## 既存環境の起動ファイルを更新する場合
+
+リポジトリを更新した後、次を実行します。WSL の新規作成、Docker／CFD の再構築は行いません。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\UpdateLaunchers.ps1 `
+  -DistroName opencae-workshop2026 -InstallLocation C:\wsl_img\opencae-workshop2026
+```
+
+登録 ID・保存先・Linux 側の識別記録を照合した後に配置します。旧 `%LOCALAPPDATA%\OpenCAE\environments` と、MSIX の `Packages\<パッケージ>\LocalCache\Local\OpenCAE\environments` から記録を探します。複数の異なる記録があれば停止するので `-ConfigPath` で移行元を指定してください。旧記録は削除せず保持します。旧デスクトップショートカットは手動で削除してください。
 
 ## 失敗した場合の再開
 
@@ -58,21 +73,21 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\RefreshS
 
 Ubuntu 内の工程記録は `~/.local/state/opencae-workshop2026/`、CFD のログ・結果はプロジェクト内の `work/` です。Crew の本人用ログは `~/.local/state/opencae-workshop2026/logs/crew.log` にあります。ログにはアクセス URL が含まれる可能性があるので共有しないでください。
 
-Windows／WSL の再起動後は **Start Kiro Crew** を再実行します。自動起動は設定しません。Windows から localhost へ接続できない場合は、WSL の localhost 転送や組織のファイアウォール設定を確認します。これらのグローバル設定はスクリプトで書き換えません。
+Windows／WSL の再起動後は **Start Kiro Crew.cmd** を再実行します。自動起動は設定しません。Windows から localhost へ接続できない場合は、WSL の localhost 転送や組織のファイアウォール設定を確認します。これらのグローバル設定はスクリプトで書き換えません。
 
 ## 環境の削除
 
 専用 WSL の Linux ファイル・個人認証・Docker イメージ・計算結果をすべて削除します。必要な成果物は事前に退避してください。設定ファイルは環境名ごとに作成されています。
 
 ```powershell
-$config = "$env:LOCALAPPDATA\OpenCAE\environments\ubuntu_of_kiro\environment.json"
+$config = "C:\wsl_img\ubuntu_of_kiro\environment.json"
 # 対象の確認のみ
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\RemoveEnvironment.ps1 -ConfigPath $config -WhatIf
 # 確認に同意した後に削除
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\RemoveEnvironment.ps1 -ConfigPath $config
 ```
 
-`ubuntu_of_kiro` は作成した環境名へ置き換えます。WSL 登録 ID・保存先・Linux 側の識別記録を照合し、一致しない場合は停止します。削除成功後に、その環境の設定と所有が確認できたショートカットを削除します。Windows の clone／ZIP、他の WSL、共有ダウンロードキャッシュは保持します。保存先を再帰削除せず、未知のメタデータファイルも保持します。WSL 削除後の処理失敗時は、残った設定で同じコマンドを再実行できます。インポート途中など識別記録が未作成の環境は手動確認が必要です。
+`ubuntu_of_kiro` は作成した環境名へ置き換えます。WSL 登録 ID・保存先・Linux 側の識別記録を照合し、一致しない場合は停止します。削除成功後に、インストール先の既知の起動ファイルと設定を削除します。Windows の clone／ZIP、他の WSL、共有ダウンロードキャッシュは保持します。保存先を再帰削除せず、未知のメタデータファイルも保持します。インポート前や削除処理中の回復用記録は `<InstallLocation>.opencae-state\environment.json` に置きます。WSL 削除後にインストール先が消えた場合は、リポジトリ側の RemoveEnvironment.ps1 にこの回復用記録を指定して再実行できます。インポート途中など識別記録が未作成の環境は手動確認が必要です。
 
 ## Proxy プレビュー
 

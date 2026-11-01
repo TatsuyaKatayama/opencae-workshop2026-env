@@ -154,7 +154,7 @@ Docker Engine、Linux 版 Docker CLI、Compose、Buildx は WSL 内に配置す�
 | --- | --- |
 | 事前 | Setup.ps1 で専用の WSL2 Ubuntu 24.04 を新規作成し、Linux ユーザー、systemd、Docker Engine／CLI・Compose・Buildx、Kiro CLI・Crew・OpenCode・Codex CLI を導入・設定 |
 | 事前 | 配布ファイルを WSL の Linux ファイルシステムへ配置し、既存 Dockerfile からネイティブ CPU 用の CFD イメージをローカルビルドして確認 |
-| 事前 | Windows 側の設定・起動スクリプトを保存し、デスクトップに3つのショートカットを作成 |
+| 事前 | Windows 側の設定・起動スクリプトを保存し、WSL 保存先に3つの CMD 起動スクリプトを配置 |
 | 当日 | **Start Backend** を起動し、Windows のブラウザーで個人認証 |
 | 当日 | **Start Kiro Crew** を起動し、Windows のブラウザーから利用 |
 | 終了時 | **Stop Kiro Crew** を起動 |
@@ -164,7 +164,7 @@ Docker Engine、Linux 版 Docker CLI、Compose、Buildx は WSL 内に配置す�
 ### 5.3 セットアップ処理の責務
 
 - 処理の本体は **setup/ubuntu2404/setup.sh**。Ubuntu 24.04 のみを対象とし、Ubuntu 単体でも直接実行できる構成にする。
-- **setup/windows/Setup.ps1** は Windows／WSL の前提確認、新規環境作成、ユーザー初期化、配布ファイルの配置、Bash の呼び出し、Windows 用設定保存、ショートカット作成を担当する。
+- **setup/windows/Setup.ps1** は Windows／WSL の前提確認、新規環境作成、ユーザー初期化、配布ファイルの配置、Bash の呼び出し、Windows 用設定保存、CMD 起動スクリプト配置を担当する。
 - Windows は ARM64／x64 に対応し、同じ CPU の Ubuntu・CLI・コンテナを利用する。
 - WSL 本体や仮想化機能が不足する場合は必要な準備と再起動を案内し、準備後に再実行する。自動化の対象は専用ディストリビューションの新規作成以降とする。
 - Ubuntu のシステム導入処理だけ root／sudo を使用し、CLI・Crew・認証・作業ファイルは指定ユーザーで管理する。ユーザーを作成して sudo 権限を付与し、パスワードは保存しない。
@@ -177,26 +177,28 @@ Docker Engine、Linux 版 Docker CLI、Compose、Buildx は WSL 内に配置す�
 | --- | --- |
 | DistroName | WSL の登録名。独自名を指定可能。既定値 opencae-workshop2026 |
 | UserName | 新規 Linux ユーザー名。省略時は対話入力 |
-| InstallLocation | 任意の Windows 側保存先。例 D:\WSL\opencae-workshop2026。省略時は %LOCALAPPDATA%\OpenCAE\WSL\<環境名> |
+| InstallLocation | 任意の Windows 側保存先。例 D:\WSL\opencae-workshop2026。省略時は %USERPROFILE%\OpenCAE\WSL\<環境名> |
 | EnableProxyPreview | Proxy のプレビュー機能を明示的に有効化。既定では無効 |
 
 環境名とインストール先は独立した値とする。Ubuntu 24.04 の公式配布物を用い、指定名・指定先で WSL2 環境を新規作成する。Canonical の Ubuntu 24.04 WSL rootfs を setup/config/wsl.json の URL・SHA256 で検証し、wsl --import --version 2 を使用する。WSL2 と systemd が利用可能な更新済み WSL を前提にする。
 
 既存ディストリビューションの転用はしない。同名環境、既存データのある保存先は無条件に上書き・削除しない。ただし本セットアップの作成記録に一致する未完了環境は、記録と実環境を照合して再開可能とする。既存の WSL 環境や既定ディストリビューションを変更しない。
 
-### 5.5 Windows 設定・ショートカット
+### 5.5 Windows 設定・起動ファイル
 
-セットアップで Windows の **%LOCALAPPDATA%\OpenCAE** 配下に、環境ごとの設定と Windows 用スクリプトを配置する。元の clone／ZIP 解凍ディレクトリを移動しても起動できるようにする。
+WSL の **InstallLocation** に環境ごとの `environment.json`、PowerShell スクリプト、3つの CMD 起動スクリプトを置く。AppData とデスクトップのショートカットには依存しない。元の clone／ZIP 解凍ディレクトリを移動しても起動できるようにする。
 
-設定には WSL 登録名、Linux ユーザー名、WSL 内のプロジェクト絶対パス、Crew のポート、作成・セットアップ状態を記録する。登録名の受け渡しにグローバルな環境変数は使用しない。各 PS1 は `-ConfigPath` で設定ファイルを受け取り、`wsl.exe -d <登録名> -u <ユーザー名>` で同じユーザーの Bash を呼び出す。
+設定には WSL 登録名、Linux ユーザー名、WSL 内のプロジェクト絶対パス、Crew のポート、作成・セットアップ状態を記録する。登録名の受け渡しにグローバルな環境変数は使用しない。CMD は `%~dp0` で同じフォルダーの PS1 と設定を指定する。PS1 を直接実行した場合も、設定指定を省略すると同じフォルダーの environment.json を使う。
 
-| ショートカット | Windows 側 | Ubuntu 側 |
+| 起動スクリプト | Windows 側 | Ubuntu 側 |
 | --- | --- | --- |
-| Start Backend | StartBackend.ps1 | start-backend.sh |
-| Start Kiro Crew | StartCrew.ps1 | crew-start.sh |
-| Stop Kiro Crew | StopCrew.ps1 | crew-stop.sh |
+| Start Backend.cmd | StartBackend.ps1 | start-backend.sh |
+| Start Kiro Crew.cmd | StartCrew.ps1 | crew-start.sh |
+| Stop Kiro Crew.cmd | StopCrew.ps1 | crew-stop.sh |
 
-複数環境ではショートカット名に環境名を付け、各ショートカットを対応する設定へ関連付ける。ショートカットや通常の構成ファイルにパスワード・認証トークンを埋め込まない。
+新規インポート前は保存先を空に保つため、途中記録を `<InstallLocation>.opencae-state\environment.json` に置く。インポート後は保存先へ記録を移す。削除前にも回復記録を用意する。取得キャッシュと保存先の既定値はユーザープロファイル直下の OpenCAE を使用する。
+
+`UpdateLaunchers.ps1` は既存の WSL 登録・保存先・Linux 識別記録を照合し、Windows 用起動ファイルと設定だけを配置・更新する。旧 AppData／MSIX の記録から移行可能にし、曖昧な記録や別環境の設定は上書きしない。旧ショートカットは手動削除とする。
 
 ### 5.6 認証・起動・停止
 
@@ -206,13 +208,13 @@ Docker Engine、Linux 版 Docker CLI、Compose、Buildx は WSL 内に配置す�
 - Crew は環境内の専用サービス名で管理し、Windows の起動端末を閉じても稼働を維持する。OS／WSL 起動時の自動起動は標準で有効にしない。
 - 認証は指定ユーザーの製品設定領域に保存する。アクセス URL を含み得るログは本人用権限で保管し、Git や CI artifact の対象にしない。失敗時は次の操作とログの場所を示す。
 
-環境削除は `RemoveEnvironment.ps1 -ConfigPath ...` で行う。WSL 登録 ID・保存先・Linux 識別記録を照合し、削除内容を表示して明示確認する。`-WhatIf` では削除・設定変更を行わない。対象 WSL のデータと対応する既知のメタデータ・ショートカットだけを削除し、他環境と Windows の配布元は保持する。
+環境削除は `RemoveEnvironment.ps1 -ConfigPath ...` で行う。WSL 登録 ID・保存先・Linux 識別記録を照合し、削除内容を表示して明示確認する。`-WhatIf` では削除・設定変更を行わない。対象 WSL のデータと対応する既知の起動ファイル・メタデータだけを削除し、他環境と Windows の配布元は保持する。
 
 ### 5.7 Proxy プレビュー
 
 Proxy 対応はプレビュー実装とし、通常経路と区別して対応範囲・制限・検証状況を表示する。HTTP_PROXY／HTTPS_PROXY／NO_PROXY を扱い、localhost・127.0.0.1・::1 を除外する。インストール時通信、Docker デーモン、Docker ビルド、当日の CLI／Crew の各通信を適用対象として設計し、実際の対応範囲を記録する。
 
-認証付き Proxy の秘密情報をショートカット、共有設定、通常ログへ保存しない。独自 CA の導入は Proxy URL と別の設定として扱い、必要時の手順・対応範囲を明示する。Proxy 経由の未検証項目を通常環境での検証成功に含めない。
+認証付き Proxy の秘密情報を起動ファイル、共有設定、通常ログへ保存しない。独自 CA の導入は Proxy URL と別の設定として扱い、必要時の手順・対応範囲を明示する。Proxy 経由の未検証項目を通常環境での検証成功に含めない。
 
 ## 6. macOS への展開
 
@@ -229,7 +231,7 @@ Docker 層の Dockerfile、Compose 定義、作業フォルダー構成は共通
 - MPI 2プロセスの結果が直列計算と許容誤差内で一致する。
 - 追加 Python パッケージを読み込め、foamlib でケースを読み、日本語ラベル付きグラフを保存できる。
 - Crew から Kiro CLI を使い、計算コンテナ内のコマンドを実行できる。OpenCode／Codex CLI も選択可能とし、個人認証と Crew 経由の会話はバックエンド別に手動確認する。
-- Windows の新規環境作成、任意名・任意保存先、ZIP／clone 両経路、途中再開、3つのショートカットによる認証・起動・停止を確認する。
+- Windows の新規環境作成、任意名・任意保存先、ZIP／clone 両経路、途中再開、3つの CMD による認証・起動・停止を確認する。
 - Ubuntu 24.04 単体で Bash のセットアップ処理を利用できる。Proxy プレビューの検証状況を別途記録する。
 - コンテナを作り直しても作業フォルダーのデータが残る。
 - macOS 対応版では Apple Silicon Mac でも同じ確認を完了する。
@@ -242,7 +244,7 @@ Docker 層の Dockerfile、Compose 定義、作業フォルダー構成は共通
 
 WSL 用 Actions は利用可能だが、GitHub ホスト型ランナーのネストした仮想化は正式サポートされていない。標準 Windows CI の成功を WSL2 の検証成功とみなさない。WSL2＋systemd＋Docker の新規作成・再開・起動停止は、能力確認済みの Windows 実機または専用セルフホスト型ランナーで確認する。WSL1 は代替の合格条件にしない。
 
-個人認証、既定ブラウザー、ショートカット操作、Windows 再起動後の復帰、Crew の会話と動画再生は ARM64／x64 の手動受け入れに含める。テスト ID・対象 CPU・実行環境・結果を記録し、モックの成功や未実施を実機成功として扱わない。Proxy プレビューは別途記録する。Ubuntu 24.04 の Bash コアとモックによる制御テストを実装した。Docker の新規導入と CFD ビルド・確認を伴う統合テストは使い捨て ARM64／amd64 のネイティブ CI で実行し、開発用 WSL では実行しない。同版配布を利用し、CPU に対応する URL・ハッシュ・展開名を選択する。CI は対象 CPU を選択可能とし、統合実行の成否は CPU ごとに別記録とする。Windows 側スクリプトを実装し、制御テストと実機受け入れを分けて確認する。
+個人認証、既定ブラウザー、CMD のダブルクリック操作、Windows 再起動後の復帰、Crew の会話と動画再生は ARM64／x64 の手動受け入れに含める。テスト ID・対象 CPU・実行環境・結果を記録し、モックの成功や未実施を実機成功として扱わない。Proxy プレビューは別途記録する。Ubuntu 24.04 の Bash コアとモックによる制御テストを実装した。Docker の新規導入と CFD ビルド・確認を伴う統合テストは使い捨て ARM64／amd64 のネイティブ CI で実行し、開発用 WSL では実行しない。同版配布を利用し、CPU に対応する URL・ハッシュ・展開名を選択する。CI は対象 CPU を選択可能とし、統合実行の成否は CPU ごとに別記録とする。Windows 側スクリプトを実装し、制御テストと実機受け入れを分けて確認する。
 
 ## 8. Git リポジトリの構成
 

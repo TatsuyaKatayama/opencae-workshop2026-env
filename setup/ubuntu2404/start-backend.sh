@@ -59,6 +59,6 @@ fi
 kirocrew config set agent.acp_backend "$backend"
 kirocrew config set agent.kas_bundle false
 printf '%s\n' "$backend" > "$STATE/backend"
-note "バックエンドを $backend に設定しました。Start Kiro Crew を実行してください。"
-note 'Crew が起動中なら Stop Kiro Crew → Start Kiro Crew で設定を反映してください。'
+note "バックエンドを $backend に設定しました。Start Kiro Crew.cmd を実行してください。"
+note 'Crew が起動中なら Stop Kiro Crew.cmd → Start Kiro Crew.cmd で設定を反映してください。'
 [[ "$backend" != opencode ]] || note 'OpenCode の提供先・モデルを Crew の画面で選び、会話できることを確認してください。'

@@ -181,122 +181,88 @@ function Invoke-CrewAction {
     }
 }
 
-function Get-CrewShortcutArguments {
-    param([string]$ScriptPath,[string]$ConfigPath)
-    '-NoProfile -NoExit -ExecutionPolicy Bypass -File ' + (ConvertTo-NativeArgument $ScriptPath -ForceQuote) +
-        ' -ConfigPath ' + (ConvertTo-NativeArgument $ConfigPath -ForceQuote) + ' -PauseOnError'
+function Get-WorkshopUserRoot {
+    Join-Path ([Environment]::GetFolderPath('UserProfile')) 'OpenCAE'
 }
 
-function Initialize-CrewShellLink {
-    if ('OpenCAE.ShellLinks' -as [type]) { return }
-    # WScript.Shell のコードページ変換を避け、Unicode の Shell API を直接使う。
-    Add-Type -TypeDefinition @'
-using System;
-using System.Text;
-using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
-namespace OpenCAE {
-    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
-    internal class ShellLinkClass { }
-    [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface IShellLinkW {
-        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int length, IntPtr data, uint flags);
-        void GetIDList(out IntPtr id);
-        void SetIDList(IntPtr id);
-        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder value, int length);
-        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string value);
-        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder value, int length);
-        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string value);
-        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder value, int length);
-        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string value);
-        void GetHotkey(out short value);
-        void SetHotkey(short value);
-        void GetShowCmd(out int value);
-        void SetShowCmd(int value);
-        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int length, out int index);
-        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string path, int index);
-        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, uint reserved);
-        void Resolve(IntPtr window, uint flags);
-        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string path);
-    }
-    public class ShellLinkData {
-        public string TargetPath;
-        public string Arguments;
-        public string WorkingDirectory;
-        public int WindowStyle;
-    }
-    public static class ShellLinks {
-        public static void Save(string path, string target, string arguments, string directory) {
-            object instance = new ShellLinkClass();
-            try {
-                IShellLinkW link = (IShellLinkW)instance;
-                link.SetPath(target);
-                link.SetArguments(arguments);
-                link.SetWorkingDirectory(directory);
-                link.SetShowCmd(1);
-                ((IPersistFile)instance).Save(path, true);
-            } finally { Marshal.FinalReleaseComObject(instance); }
-        }
-        public static ShellLinkData Read(string path) {
-            object instance = new ShellLinkClass();
-            try {
-                ((IPersistFile)instance).Load(path, 0);
-                IShellLinkW link = (IShellLinkW)instance;
-                StringBuilder target = new StringBuilder(32768);
-                StringBuilder arguments = new StringBuilder(32768);
-                StringBuilder directory = new StringBuilder(32768);
-                int show;
-                link.GetPath(target, target.Capacity, IntPtr.Zero, 0);
-                link.GetArguments(arguments, arguments.Capacity);
-                link.GetWorkingDirectory(directory, directory.Capacity);
-                link.GetShowCmd(out show);
-                return new ShellLinkData { TargetPath=target.ToString(), Arguments=arguments.ToString(), WorkingDirectory=directory.ToString(), WindowStyle=show };
-            } finally { Marshal.FinalReleaseComObject(instance); }
-        }
-    }
-}
-'@
+function Get-PendingConfigPath {
+    param([string]$InstallLocation)
+    Join-Path ($InstallLocation.TrimEnd('\') + '.opencae-state') 'environment.json'
 }
 
-function New-CrewShortcuts {
-    param([string]$LauncherDirectory,[string]$ConfigPath,[string]$DistroName,[string]$DesktopDirectory)
-    $LauncherDirectory = (Resolve-Path -LiteralPath $LauncherDirectory).ProviderPath
-    $ConfigPath = (Resolve-Path -LiteralPath $ConfigPath).ProviderPath
-    $entries = @(@('Start Backend','StartBackend.ps1'),@('Start Kiro Crew','StartCrew.ps1'),@('Stop Kiro Crew','StopCrew.ps1'))
-    foreach ($entry in $entries) {
-        if (!(Test-Path -LiteralPath (Join-Path $LauncherDirectory $entry[1]) -PathType Leaf)) { throw "Launcher is missing: $($entry[1])" }
-    }
-    if (!$DesktopDirectory) { $DesktopDirectory = [Environment]::GetFolderPath('DesktopDirectory') }
-    $desktop = (Resolve-Path -LiteralPath $DesktopDirectory).ProviderPath
-    Initialize-CrewShellLink
-    $hostExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    if (!(Test-Path -LiteralPath $hostExe -PathType Leaf)) { throw 'Windows PowerShell executable was not found.' }
-    foreach ($entry in $entries) {
-        $path = Join-Path $desktop "$($entry[0]) ($DistroName).lnk"
-        $arguments = Get-CrewShortcutArguments (Join-Path $LauncherDirectory $entry[1]) $ConfigPath
-        # すべて絶対パスで渡すため、作業フォルダーをリンク先の条件にしない。
-        [OpenCAE.ShellLinks]::Save($path,$hostExe,$arguments,'')
-        $saved = [OpenCAE.ShellLinks]::Read($path)
-        if ($saved.TargetPath -ine $hostExe -or $saved.Arguments -cne $arguments -or $saved.WorkingDirectory -ne '') {
-            throw "Shortcut verification failed: $path"
+function Get-LegacyConfigPaths {
+    param([string]$DistroName)
+    $paths = @()
+    $legacy = "OpenCAE\environments\$DistroName\environment.json"
+    $paths += (Join-Path $env:LOCALAPPDATA $legacy)
+    # パッケージ化された端末から旧 Setup を実行した場合の物理保存先。
+    $packages = Join-Path $env:LOCALAPPDATA 'Packages'
+    if (Test-Path -LiteralPath $packages -PathType Container) {
+        foreach ($package in Get-ChildItem -LiteralPath $packages -Directory) {
+            $paths += (Join-Path $package.FullName "LocalCache\Local\$legacy")
         }
     }
+    return $paths
 }
 
-function Remove-OwnedCrewShortcuts {
-    param([string]$LauncherDirectory,[string]$ConfigPath,[string]$DistroName,[switch]$LegacyOnly)
-    $desktop = [Environment]::GetFolderPath('DesktopDirectory')
-    Initialize-CrewShellLink
-    $hostExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $entries = @(@('Kiro CLI Login','KiroLogin.ps1'))
-    if (!$LegacyOnly) { $entries += @(@('Start Backend','StartBackend.ps1'),@('Start Kiro Crew','StartCrew.ps1'),@('Stop Kiro Crew','StopCrew.ps1')) }
-    foreach ($entry in $entries) {
-        $path = Join-Path $desktop "$($entry[0]) ($DistroName).lnk"
-        if (!(Test-Path -LiteralPath $path)) { continue }
-        $shortcut = [OpenCAE.ShellLinks]::Read($path)
-        $arguments = '-NoProfile -ExecutionPolicy Bypass -File ' + (ConvertTo-NativeArgument (Join-Path $LauncherDirectory $entry[1])) + ' -ConfigPath ' + (ConvertTo-NativeArgument $ConfigPath) + ' -PauseOnError'
-        $currentArguments = Get-CrewShortcutArguments (Join-Path $LauncherDirectory $entry[1]) $ConfigPath
-        if ($shortcut.TargetPath -ieq $hostExe -and ($shortcut.Arguments -ceq $arguments -or $shortcut.Arguments -ceq $currentArguments)) { Remove-Item -LiteralPath $path }
+function Find-EnvironmentConfig {
+    param([string]$DistroName,[string]$InstallLocation)
+    Assert-Names $DistroName 'workshop'
+    $paths = @()
+    if ($InstallLocation) {
+        $paths += (Join-Path $InstallLocation 'environment.json')
+        $paths += (Get-PendingConfigPath $InstallLocation)
+    }
+    $paths += @(Get-LegacyConfigPaths $DistroName)
+    $found = @()
+    foreach ($path in ($paths | Select-Object -Unique)) {
+        if (!(Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+        $config = Read-Environment $path
+        if ($config.distroName -ine $DistroName -or $config.phase -eq 'Removed') { continue }
+        if ($InstallLocation -and [IO.Path]::GetFullPath($config.installLocation).TrimEnd('\') -ine [IO.Path]::GetFullPath($InstallLocation).TrimEnd('\')) { continue }
+        # インストール先の記録を最優先とする。
+        if ($InstallLocation -and [IO.Path]::GetFullPath($path) -ieq [IO.Path]::GetFullPath((Join-Path $InstallLocation 'environment.json'))) { return $path }
+        $found += [pscustomobject]@{Path=$path;Config=$config}
+    }
+    if ($found.Count -eq 0) { return $null }
+    $first = $found[0].Config
+    foreach ($item in $found) {
+        if ($item.Config.environmentId -ne $first.environmentId -or $item.Config.registrationId -ne $first.registrationId) {
+            throw 'Multiple different environment records found. Specify -ConfigPath explicitly in UpdateLaunchers.ps1.'
+        }
+    }
+    return $found[0].Path
+}
+
+function Get-InstalledLauncherFiles {
+    @('Common.ps1','KiroLogin.ps1','StartBackend.ps1','StartCrew.ps1','StopCrew.ps1','RemoveEnvironment.ps1','UpdateLaunchers.ps1',
+      'Start Backend.cmd','Start Kiro Crew.cmd','Stop Kiro Crew.cmd')
+}
+
+function Install-EnvironmentLaunchers {
+    param([string]$SourceDirectory,$Config)
+    $directory = [IO.Path]::GetFullPath($Config.installLocation)
+    if (!(Test-Path -LiteralPath $directory -PathType Container)) { throw 'WSL installation directory is missing.' }
+    $configPath = Join-Path $directory 'environment.json'
+    if (Test-Path -LiteralPath $configPath) {
+        $previous = Read-Environment $configPath
+        if ($previous.environmentId -ne $Config.environmentId) { throw 'Installation directory belongs to another environment.' }
+    }
+    $files = @(Get-InstalledLauncherFiles | Where-Object { $_ -like '*.ps1' })
+    foreach ($file in $files) {
+        if (!(Test-Path -LiteralPath (Join-Path $SourceDirectory $file) -PathType Leaf)) { throw "Source script is missing: $file" }
+    }
+    Save-Environment $configPath $Config
+    foreach ($file in $files) {
+        $source = (Resolve-Path -LiteralPath (Join-Path $SourceDirectory $file)).ProviderPath
+        $target = Join-Path $directory $file
+        if ([IO.Path]::GetFullPath($source) -ine [IO.Path]::GetFullPath($target)) { Copy-Item -LiteralPath $source -Destination $target -Force }
+    }
+    foreach ($entry in @(@('Start Backend.cmd','StartBackend.ps1'),@('Start Kiro Crew.cmd','StartCrew.ps1'),@('Stop Kiro Crew.cmd','StopCrew.ps1'))) {
+        $lines = @('@echo off','setlocal DisableDelayedExpansion',
+            ('"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%~dp0' + $entry[1] + '" -ConfigPath "%~dp0environment.json"'),
+            'set "opencae_launcher_status=%errorlevel%"','echo.','pause','exit /b %opencae_launcher_status%')
+        [IO.File]::WriteAllText((Join-Path $directory $entry[0]),(($lines -join "`r`n")+"`r`n"),[Text.Encoding]::ASCII)
     }
 }
 

@@ -22,15 +22,20 @@ param(
     $arch = Get-SetupArchitecture
     if (!$UserName) { $UserName = Read-Host 'Linux user name (lowercase)' }
     Assert-Names $DistroName $UserName
-    $homeDirectory = Join-Path $env:LOCALAPPDATA "OpenCAE\environments\$DistroName"
-    $configPath = Join-Path $homeDirectory 'environment.json'
+    $registration = Get-WslRegistration $DistroName
     if (!$InstallLocation) {
-        $defaultLocation = Join-Path $env:LOCALAPPDATA "OpenCAE\WSL\$DistroName"
-        if (Test-Path -LiteralPath $configPath) { $defaultLocation = (Read-Environment $configPath).installLocation }
+        $defaultLocation = Join-Path (Get-WorkshopUserRoot) "WSL\$DistroName"
+        if ($registration) { $defaultLocation = $registration.BasePath -replace '^\\\\\?\\', '' }
+        else {
+            $oldPath = Find-EnvironmentConfig $DistroName
+            if ($oldPath) { $defaultLocation = (Read-Environment $oldPath).installLocation }
+        }
         $answer = Read-Host "WSL install location [$defaultLocation] (Enter to accept)"
         $InstallLocation = if ([string]::IsNullOrWhiteSpace($answer)) { $defaultLocation } else { $answer.Trim() }
     }
-    $InstallLocation = [IO.Path]::GetFullPath($InstallLocation)
+    $InstallLocation = [IO.Path]::GetFullPath($InstallLocation).TrimEnd('\')
+    $configPath = Find-EnvironmentConfig $DistroName $InstallLocation
+    if (!$configPath) { $configPath = Get-PendingConfigPath $InstallLocation }
     if ($InstallLocation -notmatch '^[A-Za-z]:\\' -or $InstallLocation -match '[\r\n]') { throw 'Use an absolute path on a local Windows drive.' }
     if ($EnableProxyPreview -ne [bool]$ProxyConfig) { throw 'Specify both -EnableProxyPreview and -ProxyConfig.' }
     $proxyEnvironment = @()
@@ -81,7 +86,7 @@ param(
         if ((Test-Path -LiteralPath $InstallLocation) -and @(Get-ChildItem -LiteralPath $InstallLocation -Force).Count) { throw 'Install location contains data. Inspect the interrupted import manually.' }
         $images = Get-Content -LiteralPath (Join-Path $repo 'setup/config/wsl.json') -Raw -Encoding UTF8 | ConvertFrom-Json
         $image = $images.$arch
-        $cache = Join-Path $env:LOCALAPPDATA 'OpenCAE\downloads'
+        $cache = Join-Path (Get-WorkshopUserRoot) 'downloads'
         [void][IO.Directory]::CreateDirectory($cache)
         $archive = Join-Path $cache $image.file
         if (!(Test-Path -LiteralPath $archive) -or (Get-Sha256 -LiteralPath $archive) -ine $image.sha256) {
@@ -101,6 +106,13 @@ param(
         Save-Environment $configPath $config
         Assert-Registration $config
     }
+    # インポート成功後は、Windows 設定も WSL 保存先へ置く。
+    $installedConfigPath = Join-Path $InstallLocation 'environment.json'
+    if (Test-Path -LiteralPath $installedConfigPath) {
+        if ((Read-Environment $installedConfigPath).environmentId -ne $config.environmentId) { throw 'Installation directory metadata belongs to another environment.' }
+    }
+    $configPath = $installedConfigPath
+    Save-Environment $configPath $config
     $result = Invoke-Wsl -Capture -Arguments @('-d',$DistroName,'-u','root','--exec','wslpath','-a','-u',$repo)
     Assert-WslResult $result 'Project path conversion'
     $linuxSource = $result.Output.Trim()
@@ -138,15 +150,14 @@ param(
     }
     $coreArgs += @('--port',[string]$Port)
     Assert-WslResult (Invoke-Wsl -Arguments $coreArgs) 'Ubuntu tool setup and CFD validation'
-    $launchers = Join-Path $homeDirectory 'launchers'
-    [void][IO.Directory]::CreateDirectory($launchers)
-    foreach ($file in @('Common.ps1','KiroLogin.ps1','StartBackend.ps1','StartCrew.ps1','StopCrew.ps1')) {
-        Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $launchers $file) -Force
-    }
-    New-CrewShortcuts $launchers $configPath $DistroName
-    Remove-OwnedCrewShortcuts $launchers $configPath $DistroName -LegacyOnly
     $config.phase='Ready'; Save-Environment $configPath $config
-    Write-Host 'セットアップ完了。デスクトップの「Start Backend」→「Start Kiro Crew」の順に起動してください。終了時は「Stop Kiro Crew」を使用してください。'
+    Install-EnvironmentLaunchers $PSScriptRoot $config
+    $pending = Get-PendingConfigPath $InstallLocation
+    if (Test-Path -LiteralPath $pending) { Remove-Item -LiteralPath $pending }
+    $pendingDirectory = Split-Path -Parent $pending
+    if ((Test-Path -LiteralPath $pendingDirectory) -and @(Get-ChildItem -LiteralPath $pendingDirectory -Force).Count -eq 0) { Remove-Item -LiteralPath $pendingDirectory }
+    Write-Host "セットアップ完了。$InstallLocation の Start Backend.cmd → Start Kiro Crew.cmd の順に実行してください。終了時は Stop Kiro Crew.cmd を使用してください。"
+
 }
 
 if ($MyInvocation.InvocationName -ne '.') {

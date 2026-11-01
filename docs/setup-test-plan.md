@@ -9,7 +9,7 @@
 | 自動・制御 | GitHub Actions Windows／Ubuntu | 入力、設定、外部コマンドへの引数、終了コード、失敗・再開判定。WSL 等をモック化したテストは実起動検証として数えない |
 | 自動・Linux 統合 | Ubuntu 24.04 ARM64／amd64 | Bash の導入処理、各ツールの版、権限、Docker・CFD 検証。systemd が必要なものは利用可能な VM で実施 |
 | WSL2 統合 | Windows ARM64／x64 の実機、または WSL2 対応セルフホスト型ランナー | 専用 Ubuntu の新規作成、配置、ユーザー、systemd、Docker、起動・停止、再開 |
-| 手動 | Windows ARM64／x64 | 個人認証、既定ブラウザー、ショートカット操作、再起動後の復帰、Crew 会話・動画再生 |
+| 手動 | Windows ARM64／x64 | 個人認証、既定ブラウザー、CMD 起動操作、再起動後の復帰、Crew 会話・動画再生 |
 
 Canonical は WSL の導入・rootfs 取得・Bash 実行用 Actions を提供している。ただし Actions の存在は GitHub ホスト型ランナー上の WSL2 動作保証を意味しない。GitHub はネストした仮想化を正式サポートしていないため、標準 Windows ランナーだけで WSL2＋systemd＋Docker の全工程を保証しない。WSL1 の成功は代替の合格条件にしない。
 
@@ -26,7 +26,7 @@ WSL2 CI はまずカーネル起動を含む能力確認を行い、対応環境
 | S05 | Setup.ps1 | 任意名・既定／指定保存先で Ubuntu 24.04／WSL2 を作成し、指定ユーザー・sudo・systemd を確認 | WSL2 |
 | S06 | Setup.ps1 | clone／ZIP から Linux ファイルシステムへ配置。元の配布ディレクトリを移動しても起動可能 | WSL2＋手動 |
 | S07 | Setup.ps1 | 作成記録が一致する未完了環境のみ再開。記録不整合や他環境を再利用しない | 自動＋WSL2 |
-| S08 | Setup.ps1 | 設定保存と3ショートカット作成。ConfigPath、対象環境・ユーザー・プロジェクトパスが一致 | 自動＋手動 |
+| S08 | Setup.ps1 | インストール先への設定保存と3 CMD 配置。ConfigPath、対象環境・ユーザー・プロジェクトパスが一致 | 自動＋手動 |
 | L01 | setup.sh | Ubuntu 24.04、ARM64／amd64 を判定し、対象外 OS／CPU を拒否 | 自動＋Linux |
 | L02 | setup.sh | Docker Engine／CLI・Compose・Buildx、Kiro CLI・Crew・OpenCode・Codex CLI の指定版を導入 | Linux＋WSL2 |
 | L03 | setup.sh | システム操作の権限と、CLI・Crew・作業ファイルの指定ユーザー所有を確認 | Linux＋WSL2 |
@@ -50,13 +50,17 @@ WSL2 CI はまずカーネル起動を含む能力確認を行い、対応環境
 | B02 | CLI 導入 | 両 CPU で同じ固定版のバイナリ・wheel を取得しハッシュ検証。Codex ACP と Node の lockfile 導入・再実行、ACP 初期応答を確認 | Linux CI |
 | R01 | RemoveEnvironment.ps1 | 登録 ID・保存先・識別記録の不一致、無関係な設定パスでは削除しない | 自動＋WSL2 |
 | R02 | RemoveEnvironment.ps1 | -WhatIf／確認拒否では削除・設定変更なし。unregister 失敗時はメタデータを保持 | 自動＋手動 |
-| R03 | RemoveEnvironment.ps1 | 対象のみ unregister。対応ショートカットと既知メタデータを削除し、他環境・Windows 配布元・未知ファイルを保持。途中再開も確認 | 自動＋WSL2 |
+| R03 | RemoveEnvironment.ps1 | 対象のみ unregister。対応する起動ファイルと既知メタデータを削除し、他環境・Windows 配布元・未知ファイルを保持。途中再開も確認 | 自動＋WSL2 |
+
+| U01 | UpdateLaunchers.ps1 | AppData／MSIX の旧記録から保存先へ移行。同じ登録 ID・保存先・識別記録の確認後に配置し、別環境や曖昧な記録を拒否 | 自動＋WSL2 |
+| U02 | CMD 起動ファイル | 空白・日本語を含む保存先、別の現在位置から3 CMD を実行し、同じフォルダーの設定を渡して終了コードを保持 | Windows CI＋手動 |
+| S09 | Setup.ps1 | インポート前の記録は保存先の外へ置き、インポート成功後に保存先へ移す。途中再開で登録済みディスクを再インポートしない | 自動＋WSL2 |
 
 ## 横断項目
 
-- 複数環境の設定・ショートカット・ログを分離する。同時起動する Crew は異なる Windows localhost ポートを使用する。ポート割当方法は実装時に確定する。
+- 複数環境の設定・起動ファイル・ログを分離する。同時起動する Crew は異なる Windows localhost ポートを使用する。ポート割当方法は実装時に確定する。
 - Bash の終了コードを PowerShell が保持し、成功と失敗を正しく表示する。
-- パスワード・トークン・認証コード・アクセス URL・Proxy の秘密情報が共有ログ、Git、CI artifact、ショートカットに残らない。認証中の端末表示と保護されたローカルログは別に確認する。
+- パスワード・トークン・認証コード・アクセス URL・Proxy の秘密情報が共有ログ、Git、CI artifact、起動ファイルに残らない。認証中の端末表示と保護されたローカルログは別に確認する。
 - Ubuntu 単体で Bash を直接実行し、Windows コマンドなしでセットアップ・認証・起動・停止できる。
 - Proxy プレビューは無効時に設定を変更しない。有効時は導入通信、Docker 取得、ビルド、CLI／Crew 通信を別々に検証する。localhost が Proxy を経由しないこと、認証付き Proxy の秘密情報が漏れないことを確認する。独自 CA の対応は別項目とする。
 

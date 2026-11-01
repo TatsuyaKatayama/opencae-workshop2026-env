@@ -19,12 +19,7 @@ Check ((ConvertTo-NativeArgument 'a b') -eq '"a b"') 'Space quoting'
 Check ((ConvertTo-NativeArgument 'a"b') -eq '"a\"b"') 'Quote escaping'
 Check ((ConvertTo-NativeArgument '--status') -eq '--status') 'Do not quote WSL options'
 Check ((ConvertTo-NativeArgument 'C:\plain\file.ps1' -ForceQuote) -eq '"C:\plain\file.ps1"') 'Shortcut file paths must be quoted'
-$shortcutArgs = Get-CrewShortcutArguments 'C:\plain\file.ps1' 'C:\plain\environment.json'
-Check ($shortcutArgs -match '-NoExit' -and $shortcutArgs.Contains('-File "C:\plain\file.ps1"') -and $shortcutArgs.Contains('-ConfigPath "C:\plain\environment.json"')) 'Shortcut arguments must match direct invocation'
-Check ((ConvertTo-NativeArgument 'ubuntu_of_kiro') -eq 'ubuntu_of_kiro') 'Do not quote a simple WSL name'
-Check ((ConvertTo-NativeArgument '') -eq '""') 'Empty argument must stay empty'
-Check ((ConvertTo-NativeArgument 'C:\path\') -eq 'C:\path\') 'Do not quote a path without spaces'
-Check ((ConvertTo-NativeArgument 'C:\path with spaces\') -eq '"C:\path with spaces\\"') 'Quoted trailing backslash escaping'
+
 Assert-WslReady ([pscustomobject]@{Code=0;Output='ready';Error=''})
 $message=''
 try { Assert-WslReady ([pscustomobject]@{Code=45;Output='stdout error detail';Error='stderr error detail'}) } catch { $message=$_.Exception.Message }
@@ -147,9 +142,7 @@ try {
     $previousLocalAppData=$env:LOCALAPPDATA
     $env:LOCALAPPDATA=$root
     $script:removalRegistration=$null; $script:removalCalls=@(); $script:removalCode=0; $script:wrongMarker=$false
-    $script:removedShortcuts=0
     function Get-WslRegistration { param($DistroName) return $script:removalRegistration }
-    function Remove-OwnedCrewShortcuts { param($LauncherDirectory,$ConfigPath,$DistroName) $script:removedShortcuts++ }
     function Invoke-Wsl {
         param([string[]]$Arguments,[switch]$Capture)
         $script:removalCalls+=,@($Arguments)
@@ -200,7 +193,6 @@ try {
         $script:removalCode=23
         Must-Fail { Remove-WorkshopEnvironment -ConfigPath $file -Confirm:$false }
         Check ((Read-Environment $file).phase -eq 'Removing') 'Removal failure must retain recovery metadata'
-        Check ($script:removedShortcuts -eq 0) 'Failed removal must keep shortcuts'
         # WSL 削除後のメタデータ処理失敗からも安全に再開できる。
         $script:removalRegistration=$null
         [IO.File]::WriteAllText((Join-Path $launchers 'StartBackend.ps1'),'managed launcher')
@@ -209,7 +201,6 @@ try {
         Remove-WorkshopEnvironment -ConfigPath $file -Confirm:$false
         Check (!(Test-Path -LiteralPath $file)) 'Successful removal must remove environment.json'
         Check (Test-Path -LiteralPath $keep) 'Unknown metadata files must be kept'
-        Check ($script:removedShortcuts -eq 1) 'Successful removal must clean owned shortcuts'
         Check (!(Test-Path -LiteralPath (Join-Path $launchers 'StartBackend.ps1'))) 'Managed launcher not removed'
         Check (Test-Path -LiteralPath $root) 'Installation path must not be recursively removed'
         # 正常な unregister も、指定した環境以外へは発行しない。
@@ -226,80 +217,105 @@ try {
     }
 }
 
-if ($env:OS -eq 'Windows_NT') {
-    # Unicode Shell API で一時フォルダーに .lnk を作り、引数と .lnk 自体を実行。
-    # 実デスクトップ・WSL・ブラウザーは使わない。
-    $shortcutTemp=Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ' 日本語 test')
-    $shortcutLaunchers=Join-Path $shortcutTemp 'launchers'
-    $shortcutDesktop=Join-Path $shortcutTemp 'desktop'
-    [void][IO.Directory]::CreateDirectory($shortcutLaunchers)
-    [void][IO.Directory]::CreateDirectory($shortcutDesktop)
+& {
+    $tempRoot=Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
+    $previousLocalAppData=$env:LOCALAPPDATA
+    $env:LOCALAPPDATA=Join-Path $tempRoot 'AppData'
+    $install=Join-Path $tempRoot 'disk'
+    [void][IO.Directory]::CreateDirectory($install)
     try {
-        $shortcutConfig=Join-Path $shortcutTemp 'environment.json'
-        [IO.File]::WriteAllText($shortcutConfig,'{}')
-        $dummy='param([string]$ConfigPath,[switch]$PauseOnError)' + "`n" + '[IO.File]::WriteAllText(($PSCommandPath + ''.ran''),$ConfigPath)' + "`nexit 0`n"
-        foreach ($name in @('StartBackend.ps1','StartCrew.ps1','StopCrew.ps1')) {
-            [IO.File]::WriteAllText((Join-Path $shortcutLaunchers $name),$dummy,(New-Object Text.UTF8Encoding($true)))
+        $record=[pscustomobject]@{
+            schema=1;distroName='migration-test';linuxUser='workshop';projectPath='/home/workshop/opencae-workshop2026-env'
+            port=5476;environmentId=[guid]::NewGuid().ToString();phase='Ready';registrationId='migration-id';installLocation=$install
         }
-        New-CrewShortcuts $shortcutLaunchers $shortcutConfig 'shortcut-test' -DesktopDirectory $shortcutDesktop
-        $links=@(Get-ChildItem -LiteralPath $shortcutDesktop -Filter '*.lnk')
-        Check ($links.Count -eq 3) 'Three real shortcuts must be saved'
-        foreach ($link in $links) {
-            $saved=[OpenCAE.ShellLinks]::Read($link.FullName)
-            Check ($saved.WorkingDirectory -eq '' -and $saved.WindowStyle -eq 1) 'Shortcut must not depend on a working directory'
-            $info=New-Object System.Diagnostics.ProcessStartInfo
-            $info.FileName=$saved.TargetPath; $info.Arguments=$saved.Arguments
-            $info.WorkingDirectory=$saved.WorkingDirectory; $info.UseShellExecute=$false
-            $info.CreateNoWindow=$true; $info.RedirectStandardOutput=$true; $info.RedirectStandardError=$true
-            $process=New-Object System.Diagnostics.Process
+        Check ($null -eq (Find-EnvironmentConfig 'migration-test' $install)) 'Absent configuration must not be invented'
+        $legacy=Join-Path $env:LOCALAPPDATA 'Packages/Test.App/LocalCache/Local/OpenCAE/environments/migration-test/environment.json'
+        Save-Environment $legacy $record
+        Check ((Find-EnvironmentConfig 'migration-test' $install) -eq $legacy) 'Redirected old configuration must be discoverable'
+        $installed=Join-Path $install 'environment.json'
+        Save-Environment $installed $record
+        Check ((Find-EnvironmentConfig 'migration-test' $install) -eq $installed) 'Installation directory configuration must take priority'
+        Remove-Item -LiteralPath $installed
+        $other=Join-Path $env:LOCALAPPDATA 'Packages/Other.App/LocalCache/Local/OpenCAE/environments/migration-test/environment.json'
+        $record.environmentId=[guid]::NewGuid().ToString(); Save-Environment $other $record
+        Must-Fail { Find-EnvironmentConfig 'migration-test' $install }
+        Remove-Item -LiteralPath $legacy; Remove-Item -LiteralPath $other
+        $pending=Get-PendingConfigPath $install
+        $record.phase='Importing'; $record.registrationId=''; Save-Environment $pending $record
+        Check ((Find-EnvironmentConfig 'migration-test' $install) -eq $pending) 'Interrupted import record must be discoverable'
+        Remove-Item -LiteralPath $pending
+        $record.phase='Removed'; Save-Environment $legacy $record
+        Check ($null -eq (Find-EnvironmentConfig 'migration-test' $install)) 'Removed legacy records must not block a fresh installation'
+        Check (!(Test-Path -LiteralPath (Join-Path $install 'environment.json'))) 'Pending record must stay outside the import directory'
+    } finally {
+        $env:LOCALAPPDATA=$previousLocalAppData
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force
+    }
+}
+
+if ($env:OS -eq 'Windows_NT') {
+    # 一時インストール先へ実際の CMD を配置し、空白・日本語パスで起動する。
+    $launcherTemp=Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ' 日本語 test')
+    $launcherSource=Join-Path $launcherTemp 'source'
+    $launcherInstall=Join-Path $launcherTemp 'installed'
+    [void][IO.Directory]::CreateDirectory($launcherSource)
+    [void][IO.Directory]::CreateDirectory($launcherInstall)
+    try {
+        $launcherConfig=[pscustomobject]@{
+            schema=1;distroName='launcher-test';linuxUser='workshop';projectPath='/home/workshop/opencae-workshop2026-env'
+            port=5476;environmentId=[guid]::NewGuid().ToString();phase='Ready';registrationId='launcher-id';installLocation=$launcherInstall
+        }
+        $dummy='param([string]$ConfigPath)' + "`n" + '[IO.File]::WriteAllText(($PSCommandPath + ''.ran''),$ConfigPath)' + "`nexit 0`n"
+        foreach ($name in (Get-InstalledLauncherFiles | Where-Object { $_ -like '*.ps1' })) {
+            [IO.File]::WriteAllText((Join-Path $launcherSource $name),$dummy,(New-Object Text.UTF8Encoding($true)))
+        }
+        Install-EnvironmentLaunchers $launcherSource $launcherConfig
+        $record=Join-Path $launcherInstall 'environment.json'
+        Check ((Read-Environment $record).environmentId -eq $launcherConfig.environmentId) 'Installed record identity changed'
+        $commands=@(Get-ChildItem -LiteralPath $launcherInstall -Filter '*.cmd')
+        Check ($commands.Count -eq 3) 'Three CMD launchers must be installed'
+        $cases=@($commands) + @($commands | Where-Object { $_.Name -eq 'Start Backend.cmd' })
+        $caseIndex=0
+        foreach ($command in $cases) {
+            $expectedExit=0
+            if ($caseIndex -eq 3) {
+                $expectedExit=23
+                [IO.File]::WriteAllText((Join-Path $launcherInstall 'StartBackend.ps1'),"exit 23`n")
+            }
+            $caseIndex++
+            $bytes=[IO.File]::ReadAllBytes($command.FullName)
+            Check ([Text.Encoding]::ASCII.GetString($bytes).Contains('%~dp0environment.json')) 'CMD must bind its adjacent environment record'
+            $info=New-Object Diagnostics.ProcessStartInfo
+            $info.FileName=Join-Path $env:SystemRoot 'System32\cmd.exe'
+            $info.Arguments='/d /c ""' + $command.FullName + '""'
+            $info.WorkingDirectory=$launcherSource; $info.UseShellExecute=$false; $info.CreateNoWindow=$true
+            $info.RedirectStandardInput=$true; $info.RedirectStandardOutput=$true; $info.RedirectStandardError=$true
+            $process=New-Object Diagnostics.Process
             $process.StartInfo=$info
             try {
                 [void]$process.Start()
                 $stdout=$process.StandardOutput.ReadToEndAsync(); $stderr=$process.StandardError.ReadToEndAsync()
-                if (!$process.WaitForExit(15000)) { $process.Kill(); throw 'Shortcut child PowerShell timed out' }
-                Check ($process.ExitCode -eq 0) ('Shortcut child failed: ' + $stderr.Result)
+                $process.StandardInput.WriteLine(''); $process.StandardInput.Close()
+                if (!$process.WaitForExit(15000)) { $process.Kill(); throw 'CMD launcher timed out' }
+                Check ($process.ExitCode -eq $expectedExit) ('CMD exit code was not preserved: ' + $stderr.Result)
             } finally { $process.Dispose() }
         }
         foreach ($name in @('StartBackend.ps1','StartCrew.ps1','StopCrew.ps1')) {
-            Check ([IO.File]::ReadAllText((Join-Path $shortcutLaunchers ($name+'.ran'))) -eq $shortcutConfig) 'Saved shortcut must pass the literal configuration path'
+            Check ([IO.File]::ReadAllText((Join-Path $launcherInstall ($name+'.ran'))) -eq $record) 'CMD must preserve the adjacent configuration path'
         }
-        foreach ($link in $links) {
-            # Explorer のダブルクリックと同じ ShellExecute 経路も確認する。
-            Get-ChildItem -LiteralPath $shortcutLaunchers -Filter '*.ran' | Remove-Item
-            $info=New-Object System.Diagnostics.ProcessStartInfo
-            $info.FileName=$link.FullName; $info.UseShellExecute=$true
-            $info.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
-            $process=[Diagnostics.Process]::Start($info)
-            try {
-                # ShellExecute が返すハンドルは起動先ではなくシェル側の場合がある。
-                # テスト用スクリプトの実行結果を待って、起動自体を検証する。
-                $deadline=[DateTime]::UtcNow.AddSeconds(15)
-                do {
-                    $markers=@(Get-ChildItem -LiteralPath $shortcutLaunchers -Filter '*.ran')
-                    if ($markers.Count -gt 0) { break }
-                    Start-Sleep -Milliseconds 100
-                } while ([DateTime]::UtcNow -lt $deadline)
-                if ($markers.Count -eq 0) {
-                    $processName=if ($null -eq $process) { 'no process handle' } else { $process.ProcessName }
-                    throw "ShellExecute did not execute the shortcut target ($processName)"
-                }
-                Check ($markers.Count -eq 1) 'ShellExecute must execute the shortcut target'
-                Check ([IO.File]::ReadAllText($markers[0].FullName) -eq $shortcutConfig) 'ShellExecute must preserve the literal configuration path'
-            } finally { if ($null -ne $process) { $process.Dispose() } }
-        }
-        Remove-Item -LiteralPath (Join-Path $shortcutLaunchers 'StartBackend.ps1')
-        Must-Fail { New-CrewShortcuts $shortcutLaunchers $shortcutConfig 'shortcut-test' -DesktopDirectory $shortcutDesktop }
-    } finally { Remove-Item -LiteralPath $shortcutTemp -Recurse -Force }
+        $foreign=$launcherConfig | Select-Object *
+        $foreign.environmentId=[guid]::NewGuid().ToString()
+        Must-Fail { Install-EnvironmentLaunchers $launcherSource $foreign }
+    } finally { Remove-Item -LiteralPath $launcherTemp -Recurse -Force }
     if ($env:TEST_EXPECTED_ARCH) { Check ((Get-WindowsCpu) -eq $env:TEST_EXPECTED_ARCH) 'Wrong native Windows CPU' }
     . (Join-Path $RepositoryRoot 'setup/windows/Setup.ps1')
     $temp = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
     $previousLocalAppData=$env:LOCALAPPDATA
     $env:LOCALAPPDATA=$temp
-    $script:setupRegistration=$null; $script:setupCalls=@(); $script:setupFailure=$true; $script:setupRefreshFailure=$false; $script:shortcuts=0
+    $script:setupRegistration=$null; $script:setupCalls=@(); $script:setupFailure=$true; $script:setupRefreshFailure=$false
     function Get-SetupArchitecture { return 'amd64' }
+    function Get-WorkshopUserRoot { return Join-Path $env:LOCALAPPDATA 'OpenCAE' }
     function Get-WslRegistration { param($DistroName) return $script:setupRegistration }
-    function New-CrewShortcuts { param($LauncherDirectory,$ConfigPath,$DistroName) $script:shortcuts++ }
-    function Remove-OwnedCrewShortcuts { param($LauncherDirectory,$ConfigPath,$DistroName,[switch]$LegacyOnly) }
     function Invoke-WebRequest { param($Uri,$OutFile,[switch]$UseBasicParsing,$Proxy) [IO.File]::WriteAllText($OutFile,'fake-rootfs') }
     function Get-Sha256 { param($LiteralPath) return '8251e27ffff381a4af5f41dcb94d867de3e0d9774a9241908ab34555d99315ea' }
     function Invoke-Wsl {
@@ -308,19 +324,21 @@ if ($env:OS -eq 'Windows_NT') {
         $code=0; $output=''
         if ($Arguments -contains '--import') {
             Check (Test-Path -LiteralPath $Arguments[2] -PathType Container) 'Import directory must exist before wsl --import'
+            Check (@(Get-ChildItem -LiteralPath $Arguments[2] -Force).Count -eq 0) 'Import directory must remain empty until import succeeds'
             $script:setupRegistration=[pscustomobject]@{Id='created-id';BasePath=$Arguments[2];Version=2}
         } elseif ($script:setupRefreshFailure -and $Arguments -contains 'cmp') { $code=72 }
         elseif ($Arguments -contains 'wslpath') { $output='/mnt/source with spaces' }
         elseif ($Arguments -contains 'cat') {
-            $c=Get-Content (Join-Path $env:LOCALAPPDATA 'OpenCAE/environments/test-new/environment.json') -Raw | ConvertFrom-Json
+            $c=Get-Content $script:setupConfigPath -Raw | ConvertFrom-Json
             $output=$c.environmentId
         } elseif ($script:setupFailure -and ($Arguments -join ' ') -match '/setup.sh') { $code=23 }
         return [pscustomobject]@{Code=$code;Output=$output;Error=''}
     }
     try {
         $options=@{DistroName='test-new';UserName='workshop';InstallLocation=(Join-Path $temp 'disk with spaces');Port=5480}
+        $script:setupConfigPath=Join-Path $options.InstallLocation 'environment.json'
         Must-Fail { Invoke-WorkshopSetup @options }
-        $file=Join-Path $temp 'OpenCAE/environments/test-new/environment.json'
+        $file=$script:setupConfigPath
         $c=Read-Environment $file
         Check ($c.phase -eq 'Staged') 'Failed setup must retain the staged phase'
         $script:setupFailure=$false
@@ -329,14 +347,14 @@ if ($env:OS -eq 'Windows_NT') {
         Check ($c.phase -eq 'Ready') 'Resumed setup did not complete'
         Check (@($script:setupCalls | Where-Object { $_ -contains '--import' }).Count -eq 1) 'Resume must not reimport'
         Check (@($script:setupCalls | Where-Object { ($_ -join ' ') -match 'stage-project.sh' }).Count -eq 1) 'Resume must not restage'
-        Check ($script:shortcuts -eq 1) 'Shortcuts not created'
+        Check (Test-Path -LiteralPath (Join-Path $options.InstallLocation 'Start Backend.cmd')) 'CMD launcher not installed'
         Check (@($script:setupCalls | Where-Object { $_ -contains 'normalize' }).Count -eq 2) 'Initial setup and resume must both normalize shared configuration'
         Check (@($script:setupCalls | Where-Object { $_ -contains 'compare' }).Count -eq 2) 'Version comparison must ignore line ending differences'
         $refreshes=@($script:setupCalls | Where-Object { $_ -contains 'install' -and $_[-1] -match '/scripts/smoke-test.sh$' })
         Check ($refreshes.Count -eq 2) 'Initial setup and resume must both refresh the validation script'
         Check ($refreshes[0][-2] -eq '/mnt/source with spaces/scripts/smoke-test.sh') 'Refresh must use the current Windows checkout'
         Check (@($script:setupCalls | Where-Object { $_ -contains 'cmp' -and $_[-1] -match '/scripts/smoke-test.sh$' }).Count -eq 2) 'Copied validation script must be verified'
-        Check (Test-Path (Join-Path $temp 'OpenCAE/environments/test-new/launchers/StartBackend.ps1')) 'Launchers were not copied'
+        Check (Test-Path (Join-Path $options.InstallLocation 'StartBackend.ps1')) 'Launchers were not copied'
         $bad=@{}; foreach ($k in $options.Keys) { $bad[$k]=$options[$k] }; $bad.Port=5481
         Must-Fail { Invoke-WorkshopSetup @bad }
         # 別の設定記録がない登録済み環境を流用しない。
