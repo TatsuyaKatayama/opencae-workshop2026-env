@@ -227,7 +227,7 @@ try {
 }
 
 if ($env:OS -eq 'Windows_NT') {
-    # 実際の WScript.Shell で一時フォルダーに .lnk を作り、保存された引数で子 PS を実行。
+    # Unicode Shell API で一時フォルダーに .lnk を作り、引数と .lnk 自体を実行。
     # 実デスクトップ・WSL・ブラウザーは使わない。
     $shortcutTemp=Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ' 日本語 test')
     $shortcutLaunchers=Join-Path $shortcutTemp 'launchers'
@@ -244,10 +244,9 @@ if ($env:OS -eq 'Windows_NT') {
         New-CrewShortcuts $shortcutLaunchers $shortcutConfig 'shortcut-test' -DesktopDirectory $shortcutDesktop
         $links=@(Get-ChildItem -LiteralPath $shortcutDesktop -Filter '*.lnk')
         Check ($links.Count -eq 3) 'Three real shortcuts must be saved'
-        $wscript=New-Object -ComObject WScript.Shell
         foreach ($link in $links) {
-            $saved=$wscript.CreateShortcut($link.FullName)
-            Check ($saved.WorkingDirectory -eq $shortcutLaunchers -and $saved.WindowStyle -eq 1) 'Shortcut directory and window style must be valid'
+            $saved=[OpenCAE.ShellLinks]::Read($link.FullName)
+            Check ($saved.WorkingDirectory -eq '' -and $saved.WindowStyle -eq 1) 'Shortcut must not depend on a working directory'
             $info=New-Object System.Diagnostics.ProcessStartInfo
             $info.FileName=$saved.TargetPath; $info.Arguments=$saved.Arguments
             $info.WorkingDirectory=$saved.WorkingDirectory; $info.UseShellExecute=$false
@@ -263,6 +262,24 @@ if ($env:OS -eq 'Windows_NT') {
         }
         foreach ($name in @('StartBackend.ps1','StartCrew.ps1','StopCrew.ps1')) {
             Check ([IO.File]::ReadAllText((Join-Path $shortcutLaunchers ($name+'.ran'))) -eq $shortcutConfig) 'Saved shortcut must pass the literal configuration path'
+        }
+        foreach ($link in $links) {
+            # Explorer のダブルクリックと同じ ShellExecute 経路も確認する。
+            Get-ChildItem -LiteralPath $shortcutLaunchers -Filter '*.ran' | Remove-Item
+            $info=New-Object System.Diagnostics.ProcessStartInfo
+            $info.FileName=$link.FullName; $info.UseShellExecute=$true
+            $info.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
+            $process=[Diagnostics.Process]::Start($info)
+            try {
+                if ($null -eq $process -or !$process.WaitForExit(15000)) {
+                    if ($null -ne $process) { $process.Kill() }
+                    throw 'ShellExecute shortcut launch timed out'
+                }
+                Check ($process.ExitCode -eq 0) 'ShellExecute shortcut failed'
+                $markers=@(Get-ChildItem -LiteralPath $shortcutLaunchers -Filter '*.ran')
+                Check ($markers.Count -eq 1) 'ShellExecute must execute the shortcut target'
+                Check ([IO.File]::ReadAllText($markers[0].FullName) -eq $shortcutConfig) 'ShellExecute must preserve the literal configuration path'
+            } finally { if ($null -ne $process) { $process.Dispose() } }
         }
         Remove-Item -LiteralPath (Join-Path $shortcutLaunchers 'StartBackend.ps1')
         Must-Fail { New-CrewShortcuts $shortcutLaunchers $shortcutConfig 'shortcut-test' -DesktopDirectory $shortcutDesktop }

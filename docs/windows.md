@@ -50,7 +50,7 @@ Crew の管理画面はバックエンドの認証前にも起動できます。
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\RefreshShortcuts.ps1
 ```
 
-既定以外の登録名では `-DistroName <登録名>`、設定を直接指定する場合は `-ConfigPath <environment.json>` を追加します。作成済みの各リンクは起動先・引数・作業フォルダーを保存後に照合します。PowerShell は `-NoExit` で起動するため、結果を確認したら端末を閉じてください。OneDrive でデスクトップを同期する場合、別 PC のショートカットが同期されることがあるため、利用する PC で更新してください。
+既定以外の登録名では `-DistroName <登録名>`、設定を直接指定する場合は `-ConfigPath <environment.json>` を追加します。リンクは Unicode 対応の Windows Shell API で毎回新しく作成し、起動先・引数を保存後に照合します。すべて絶対パスで渡すため、作業フォルダー欄は空にします。PowerShell は `-NoExit` で起動するため、結果を確認したら端末を閉じてください。OneDrive でデスクトップを同期する場合、別 PC のショートカットが同期されることがあるため、利用する PC で更新してください。
 
 ## 失敗した場合の再開
 

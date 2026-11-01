@@ -187,6 +187,77 @@ function Get-CrewShortcutArguments {
         ' -ConfigPath ' + (ConvertTo-NativeArgument $ConfigPath -ForceQuote) + ' -PauseOnError'
 }
 
+function Initialize-CrewShellLink {
+    if ('OpenCAE.ShellLinks' -as [type]) { return }
+    # WScript.Shell のコードページ変換を避け、Unicode の Shell API を直接使う。
+    Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+namespace OpenCAE {
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+    internal class ShellLinkClass { }
+    [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IShellLinkW {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int length, IntPtr data, uint flags);
+        void GetIDList(out IntPtr id);
+        void SetIDList(IntPtr id);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder value, int length);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string value);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder value, int length);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string value);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder value, int length);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string value);
+        void GetHotkey(out short value);
+        void SetHotkey(short value);
+        void GetShowCmd(out int value);
+        void SetShowCmd(int value);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int length, out int index);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string path, int index);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, uint reserved);
+        void Resolve(IntPtr window, uint flags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string path);
+    }
+    public class ShellLinkData {
+        public string TargetPath;
+        public string Arguments;
+        public string WorkingDirectory;
+        public int WindowStyle;
+    }
+    public static class ShellLinks {
+        public static void Save(string path, string target, string arguments, string directory) {
+            object instance = new ShellLinkClass();
+            try {
+                IShellLinkW link = (IShellLinkW)instance;
+                link.SetPath(target);
+                link.SetArguments(arguments);
+                link.SetWorkingDirectory(directory);
+                link.SetShowCmd(1);
+                ((IPersistFile)instance).Save(path, true);
+            } finally { Marshal.FinalReleaseComObject(instance); }
+        }
+        public static ShellLinkData Read(string path) {
+            object instance = new ShellLinkClass();
+            try {
+                ((IPersistFile)instance).Load(path, 0);
+                IShellLinkW link = (IShellLinkW)instance;
+                StringBuilder target = new StringBuilder(32768);
+                StringBuilder arguments = new StringBuilder(32768);
+                StringBuilder directory = new StringBuilder(32768);
+                int show;
+                link.GetPath(target, target.Capacity, IntPtr.Zero, 0);
+                link.GetArguments(arguments, arguments.Capacity);
+                link.GetWorkingDirectory(directory, directory.Capacity);
+                link.GetShowCmd(out show);
+                return new ShellLinkData { TargetPath=target.ToString(), Arguments=arguments.ToString(), WorkingDirectory=directory.ToString(), WindowStyle=show };
+            } finally { Marshal.FinalReleaseComObject(instance); }
+        }
+    }
+}
+'@
+}
+
 function New-CrewShortcuts {
     param([string]$LauncherDirectory,[string]$ConfigPath,[string]$DistroName,[string]$DesktopDirectory)
     $LauncherDirectory = (Resolve-Path -LiteralPath $LauncherDirectory).ProviderPath
@@ -197,20 +268,16 @@ function New-CrewShortcuts {
     }
     if (!$DesktopDirectory) { $DesktopDirectory = [Environment]::GetFolderPath('DesktopDirectory') }
     $desktop = (Resolve-Path -LiteralPath $DesktopDirectory).ProviderPath
-    $shell = New-Object -ComObject WScript.Shell
+    Initialize-CrewShellLink
     $hostExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     if (!(Test-Path -LiteralPath $hostExe -PathType Leaf)) { throw 'Windows PowerShell executable was not found.' }
     foreach ($entry in $entries) {
         $path = Join-Path $desktop "$($entry[0]) ($DistroName).lnk"
-        $shortcut = $shell.CreateShortcut($path)
-        $shortcut.TargetPath = $hostExe
         $arguments = Get-CrewShortcutArguments (Join-Path $LauncherDirectory $entry[1]) $ConfigPath
-        $shortcut.Arguments = $arguments
-        $shortcut.WorkingDirectory = $LauncherDirectory
-        $shortcut.WindowStyle = 1
-        $shortcut.Save()
-        $saved = $shell.CreateShortcut($path)
-        if ($saved.TargetPath -ine $hostExe -or $saved.Arguments -cne $arguments -or $saved.WorkingDirectory -ine $LauncherDirectory) {
+        # すべて絶対パスで渡すため、作業フォルダーをリンク先の条件にしない。
+        [OpenCAE.ShellLinks]::Save($path,$hostExe,$arguments,'')
+        $saved = [OpenCAE.ShellLinks]::Read($path)
+        if ($saved.TargetPath -ine $hostExe -or $saved.Arguments -cne $arguments -or $saved.WorkingDirectory -ne '') {
             throw "Shortcut verification failed: $path"
         }
     }
@@ -219,14 +286,14 @@ function New-CrewShortcuts {
 function Remove-OwnedCrewShortcuts {
     param([string]$LauncherDirectory,[string]$ConfigPath,[string]$DistroName,[switch]$LegacyOnly)
     $desktop = [Environment]::GetFolderPath('DesktopDirectory')
-    $shell = New-Object -ComObject WScript.Shell
+    Initialize-CrewShellLink
     $hostExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $entries = @(@('Kiro CLI Login','KiroLogin.ps1'))
     if (!$LegacyOnly) { $entries += @(@('Start Backend','StartBackend.ps1'),@('Start Kiro Crew','StartCrew.ps1'),@('Stop Kiro Crew','StopCrew.ps1')) }
     foreach ($entry in $entries) {
         $path = Join-Path $desktop "$($entry[0]) ($DistroName).lnk"
         if (!(Test-Path -LiteralPath $path)) { continue }
-        $shortcut = $shell.CreateShortcut($path)
+        $shortcut = [OpenCAE.ShellLinks]::Read($path)
         $arguments = '-NoProfile -ExecutionPolicy Bypass -File ' + (ConvertTo-NativeArgument (Join-Path $LauncherDirectory $entry[1])) + ' -ConfigPath ' + (ConvertTo-NativeArgument $ConfigPath) + ' -PauseOnError'
         $currentArguments = Get-CrewShortcutArguments (Join-Path $LauncherDirectory $entry[1]) $ConfigPath
         if ($shortcut.TargetPath -ieq $hostExe -and ($shortcut.Arguments -ceq $arguments -or $shortcut.Arguments -ceq $currentArguments)) { Remove-Item -LiteralPath $path }
