@@ -379,7 +379,7 @@ exit 0
                     [void]$process.WaitForExit(10000)
                     throw ('CMD launcher timed out: ' + $command.Name)
                 }
-                Check ($process.ExitCode -eq $expectedExit) ('CMD exit code was not preserved: ' + $stderr.Result)
+                Check ($process.ExitCode -eq $expectedExit) ('CMD exit code was not preserved (' + $command.Name + '): ' + $stderr.Result)
             } finally { $process.Dispose() }
         }
         foreach ($name in @('StartBackend.ps1','StartCrew.ps1','StopCrew.ps1')) {

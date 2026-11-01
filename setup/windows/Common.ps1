@@ -323,7 +323,7 @@ function Install-EnvironmentLaunchers {
         if ($entry[0] -eq '9_Allclean.cmd') {
             # 自分の CMD が削除されても、確認待ちと終了まで同じ行で実行する。
             $invocation = $invocation.Replace('%~dp0', '%opencae_install_dir%') + ' -InteractiveConfirmation'
-            $lines = @('@echo off','setlocal DisableDelayedExpansion','set "opencae_install_dir=%~dp0"','cd /d "%SystemRoot%"',($invocation + ' & pause & exit /b'))
+            $lines = @('@echo off','setlocal DisableDelayedExpansion','set "opencae_install_dir=%~dp0"','cd /d "%SystemRoot%"',($invocation + ' & pause & exit 0'))
         } else {
             $lines = @('@echo off','setlocal DisableDelayedExpansion',$invocation,
                 'set "opencae_launcher_status=%errorlevel%"','echo.','pause','exit /b %opencae_launcher_status%')
