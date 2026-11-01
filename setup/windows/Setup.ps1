@@ -116,6 +116,9 @@ param(
         Assert-WslResult (Invoke-Wsl -Arguments @('-d',$DistroName,'-u',$UserName,'--exec','bash',"$linuxSource/setup/ubuntu2404/stage-project.sh",$linuxSource,$config.projectPath,$config.environmentId)) 'Project staging'
         $config.phase='Staged'; Save-Environment $configPath $config
     }
+    # Windows の取得元を変更せず、既存 WSL の共有設定も LF に揃える。
+    $normalizer = "$linuxSource/setup/ubuntu2404/config_files.py"
+    Assert-WslResult (Invoke-Wsl -Arguments @('-d',$DistroName,'-u',$UserName,'--exec','python3',$normalizer,'normalize',$config.projectPath)) 'Normalize shared configuration line endings'
     # Resume uses a staged copy, so git pull on Windows alone does not update it.
     $smokeSource = "$linuxSource/scripts/smoke-test.sh"
     $smokeTarget = "$($config.projectPath)/scripts/smoke-test.sh"

@@ -13,6 +13,7 @@ tar -C "$source_dir" --exclude=.git --exclude=work --exclude=.aws --exclude=.cod
     --exclude=.venv --exclude=.env --exclude='.env.*' --exclude=__pycache__ -cf - . |
     tar -C "$staging" --no-same-owner -xf -
 [[ -f "$staging/setup/ubuntu2404/setup.sh" && -f "$staging/PROJECT_SPEC.md" ]] || exit 1
+python3 "$staging/setup/ubuntu2404/config_files.py" normalize "$staging"
 chmod +x "$staging"/scripts/*.sh "$staging"/examples/smoke/run.sh "$staging"/setup/ubuntu2404/*.sh
 printf '%s\n' "$identity" > "$staging/.opencae-staged-id"
 mv -- "$staging" "$destination"

@@ -160,6 +160,7 @@ if ($env:OS -eq 'Windows_NT') {
         Check (@($script:setupCalls | Where-Object { $_ -contains '--import' }).Count -eq 1) 'Resume must not reimport'
         Check (@($script:setupCalls | Where-Object { ($_ -join ' ') -match 'stage-project.sh' }).Count -eq 1) 'Resume must not restage'
         Check ($script:shortcuts -eq 1) 'Shortcuts not created'
+        Check (@($script:setupCalls | Where-Object { $_ -contains 'normalize' }).Count -eq 2) 'Initial setup and resume must both normalize shared configuration'
         $refreshes=@($script:setupCalls | Where-Object { $_ -contains 'install' -and $_[-1] -match '/scripts/smoke-test.sh$' })
         Check ($refreshes.Count -eq 2) 'Initial setup and resume must both refresh the validation script'
         Check ($refreshes[0][-2] -eq '/mnt/source with spaces/scripts/smoke-test.sh') 'Refresh must use the current Windows checkout'
