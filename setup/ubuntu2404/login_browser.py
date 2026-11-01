@@ -35,6 +35,8 @@ def authentication_url(text, backend='kiro'):
 
 
 def browser_command(url):
+    if sys.platform == 'darwin':
+        return ['/usr/bin/open', url]
     # EncodedCommand は UTF-16LE。URL を PowerShell のコードとして評価しない。
     code = "Start-Process -FilePath '" + url.replace("'", "''") + "'"
     return ['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand',
