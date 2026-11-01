@@ -17,7 +17,7 @@
 | 描画・動画・永続化の一括検証 | Linux amd64 の Actions とローカル WSL2 / ARM64 で成功 |
 | Windows 新規構築 | ARM64 / x64 とも未検証 |
 | Crew / Kiro CLI / OpenCode | この WSL に CLI 2.34.0 / Crew 0.9.0 を導入し管理画面を起動。利用者が認証し、Crew 経由の計算・描画・動画生成まで成功を報告。OpenCode は既存導入あり、Crew 接続は未検証 |
-| Apple Silicon Mac | 後続工程 |
+| Apple Silicon Mac | 導入・認証・launchd制御を実装。ホスト導入CI成功、Colima通し実機受け入れは未実施 |
 
 ## GitHub Actions
 
@@ -121,3 +121,20 @@ CI では既存の共有 pipx 領域 `/opt/pipx` を継承すると AppArmor の
 ## Windows 版 v1.0.0（2026-11-01）
 
 利用者から Windows 版の実機確認完了の報告を受け、v1.0.0 としてリリースします。[Windows CI 41287149106](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41287149106) で x64／ARM64 の PowerShell 5.1／7 が成功し、Allclean が自身の CMD を削除する場合の終了もダミー処理で確認しました。[ソース検査 41287149173](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41287149173)、[バックエンド導入 41287149125](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41287149125) も成功しています。過去の未確認事項は各時点の記録です。Proxy はプレビュー、macOS は未対応であり、実際の WSL 全削除は開発機で行っていません。
+
+
+## macOS 実装と ARM64 OSMesa バイナリ（2026-11-01）
+
+`feature/macos-support` で、macOS 15以降のApple Silicon向けにHomebrew bottle、固定ネイティブCLI、専用Colima profile、launchdと.command入口を追加しました。Homebrew自体の初回導入は公式手順で事前に行います。macOS標準Bash 3.2を対象とし、Python 3.12で設定照合・ロック・工程再開・認証・サービス制御を行います。個人認証・ブラウザー・Colima・CFD通し・スリープ復帰等は実機受け入れに残します。
+
+ARM64 ParaViewは同じ5.13.3のconda-forge `py312hcc5151f_8_osmesa` 配布物があることを確認しました。[調査CI 41311322286](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41311322286) でDISPLAYなし、`vtkOSOpenGLRenderWindow`、Mesa 25.0.5／llvmpipeによる画像生成が成功しました。全依存の取得URL・SHA256を明示ロックに固定し、CFDイメージのARM64ステージをソースビルドからバイナリ導入へ変更しました。イメージタグはof2606-r2です。
+
+[Native image CI 41311793737](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41311793737) はUbuntu ARM64／amd64の両方で成功しました。CFDイメージのネイティブビルドと、OpenFOAM直列・MPI、ParaViewのOpenFOAMReaderとCPU画像、後処理、動画、永続化を再確認しています。この成功はLinux上のコンテナ検証であり、MacのColima経由の共有フォルダーやlaunchdの実機成功を示すものではありません。
+
+配布物はスクリプト・Dockerfile・設定・ロック・資料のみです。conda-forgeはビルド時に各環境から取得し、Anaconda Distribution・Miniconda・defaultsは使いません。取得物のライセンス表示を保持し、ビルド済みイメージを公開する処理はありません。
+
+[macOS CI 41312974824](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41312974824) ではApple Siliconのmacos-15で標準Bashの構文・制御、Kiro app bundleの署名検証・固定版起動、Crew・OpenCode・Codex・Node／ACPの実導入、未認証状態、ACP初期応答、再導入とバックエンド保持が成功しました。Colimaを起動せず `--agents-only` で実施し、認証やLLM呼び出しは行っていません。
+
+[macOS CI 41313214361](https://github.com/TatsuyaKatayama/opencae-workshop2026-env/actions/runs/41313214361) は上記に加え、実際のlaunchdへのbootstrap、ダミーHTTPサービスの準備完了、重複起動時の再利用、bootout、停止後の状態確認も成功しました。これはサービス制御の実検証であり、Crew本体の会話・Colimaの実起動は含めません。Linux側では共通検査も通過し、開発用WSLにホストCLIや計算環境を導入していません。
+
+最終のローカル共通検査は66テスト（macOS実launchd専用の1件のみLinuxではスキップ）が通過しました。標準Bashでの日本語隣接変数は明示的に区切り、呼び出し元のPATHを保持して制御テストが実Dockerへ誤接続しないことも確認しています。

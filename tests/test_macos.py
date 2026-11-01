@@ -258,6 +258,36 @@ class MacTest(unittest.TestCase):
         self.assertTrue(all(len(s.rsplit('#', 1)[-1]) == 64 for s in urls))
         self.assertTrue(any('paraview-5.13.3-' in s and '_osmesa.conda#' in s for s in urls))
 
+class MacShellTest(unittest.TestCase):
+    def test_invalid_options_fail_before_any_installation(self):
+        for arguments in (['--unknown'], ['--port'], ['--port', '1'], ['--memory', '0'],
+                          ['--cpu', '1'], ['--disk', '79'], ['--port', '1;touch BAD']):
+            with self.subTest(arguments=arguments), tempfile.TemporaryDirectory() as home:
+                result = subprocess.run(['bash', str(ROOT / 'setup/macos/setup.sh'), *arguments],
+                                        env=dict(os.environ, HOME=home), capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(any(Path(home).iterdir()))
+                self.assertNotIn('Homebrew が必要', result.stderr)
+
+    @unittest.skipIf(os.geteuid() == 0, 'setup requires a non-root user')
+    def test_plan_does_not_require_homebrew_or_create_state(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'home').mkdir()
+            for name, text in [('uname', 'case "$1" in -s) echo Darwin ;; -m) echo arm64 ;; esac'),
+                               ('sw_vers', 'echo 15.0')]:
+                script = root / name
+                script.write_text('#!/bin/bash\n' + text + '\n')
+                script.chmod(0o755)
+            env = dict(os.environ, HOME=str(root / 'home'), PATH=str(root) + ':' + os.environ['PATH'])
+            for name in ('DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG', 'COLIMA_HOME', 'LIMA_HOME'):
+                env.pop(name, None)
+            result = subprocess.run(['bash', str(ROOT / 'setup/macos/setup.sh'), '--plan'],
+                                    env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('cfd-build', result.stdout)
+            self.assertFalse(any((root / 'home').iterdir()))
+
 
 if __name__ == '__main__':
     unittest.main()

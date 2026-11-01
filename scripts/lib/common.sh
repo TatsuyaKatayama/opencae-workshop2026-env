@@ -5,7 +5,7 @@ set -a
 source "$REPO_ROOT/versions.env"
 set +a
 if [[ "$(uname -s)" == Darwin ]]; then
-    export PATH="$HOME/.local/share/opencae/macos/bin:/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+    export PATH="$PATH:$HOME/.local/share/opencae/macos/bin:/opt/homebrew/bin:/opt/homebrew/sbin"
 fi
 export HOST_UID="$(id -u)" HOST_GID="$(id -g)"
 case "$(uname -m)" in

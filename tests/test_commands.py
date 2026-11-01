@@ -25,6 +25,7 @@ elif args[0] == "info":
     print(os.environ["FAKE_INFO"])
 elif args[0] == "compose" and "run" in args:
     Path(os.environ["FAKE_ARGS"]).write_text(json.dumps(args))
+    Path(os.environ["FAKE_ARGS"] + ".context").write_text(os.environ.get("DOCKER_CONTEXT", ""))
     sys.exit(int(os.environ.get("FAKE_EXIT", "0")))
 ''')
         docker.chmod(0o755)
@@ -81,6 +82,7 @@ print(os.environ.get("FAKE_ARCH", os.uname().machine) if "-m" in sys.argv else o
         result = self.run_tool("true")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.path / "args.json").exists())
+        self.assertEqual((self.path / "args.json.context").read_text(), "colima-opencae-workshop2026")
 
     def test_mac_refuses_wrong_socket_context_cpu_and_desktop(self):
         for key,value in [("FAKE_ENDPOINT", "unix:///var/run/docker.sock"),

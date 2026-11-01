@@ -38,7 +38,7 @@ Crew と CLI は同じ WSL Ubuntu 内で動かし、Windows のブラウザー�
 | Ubuntu | 24.04 LTS | コンテナのベース OS |
 | OpenFOAM | **v2606（openfoam.com 系）を公式 apt で導入。初期候補のパッケージ版は 2606.0~rc2-1。正式版と同一内容とは扱わず、リリース前に確認** | メッシュ生成・流体計算・後処理 |
 | MPI ランタイム | OpenFOAM のビルドと整合する版 | コンテナ内の並列計算 |
-| ParaView | **5.13.3**。OSMesa 対応。amd64 は公式バイナリ、ARM64 は同版をソースビルド | pvpython／pvbatch による自動可視化 |
+| ParaView | **5.13.3**。OSMesa 対応。amd64 は公式バイナリ、ARM64 は conda-forge の同版 OSMesa バイナリと依存ロックを使用 | pvpython／pvbatch による自動可視化 |
 | Mesa・OSMesa | ParaView と整合する版 | CPU によるヘッドレス描画 |
 | ffmpeg・ffprobe | Ubuntu 24.04 の提供版を基本とする | 動画生成・動画情報の確認 |
 | Python | Ubuntu 24.04 の Python 3.12 を使用。後処理用は /opt/post-venv、ParaView 用は別環境 | 補助スクリプトの実行 |
@@ -73,7 +73,7 @@ OpenFOAM 以外の厳密な版は構築時に選び、動作確認後に固定�
 | ビルド済み Docker イメージ | 公開・配布しない。GitHub Actions からも push しない |
 
 - 受講者は確認済みの Git タグを取得し、Compose の build 設定からローカルイメージを作成する。
-- ローカルイメージ名は **opencae-workshop2026-env/cfd-tools:of2606-r1** とする。
+- ローカルイメージ名は **opencae-workshop2026-env/cfd-tools:of2606-r2** とする。
 - 取得するベースイメージ、パッケージ、ソースの版を固定し、ソースアーカイブ等のチェックサムを記録する。
 - レジストリへの公開やイメージアーカイブの配布は行わない。
 
@@ -140,7 +140,7 @@ Docker Engine、Linux 版 Docker CLI、Compose、Buildx は WSL 内に配置す�
 ### 5.1.1 初期実装の検証先と方針
 
 - 最初の実装単位は ARM64 計算コンテナまでとし、このリポジトリを配置した WSL2／ARM64 内の Docker Engine で検証する。
-- apt 等の確認済み公式バイナリを優先する。ParaView の Ubuntu 24.04 apt 版は X 不在での描画に失敗したため、OSMesa 対応版を使い、amd64 は公式バイナリ、ARM64 はソースビルドを採用する。
+- apt 等の確認済み公式バイナリを優先する。ParaView の Ubuntu 24.04 apt 版は X 不在での描画に失敗したため、OSMesa 対応版を使い、amd64 は公式バイナリ、ARM64 は conda-forge の同版 OSMesa バイナリを採用する。
 - OpenFOAM は公式 apt を利用し、パッケージ版と実行時の版を両方記録する。
 - 一般の python／python3 は /opt/post-venv を標準とし、pvpython／pvbatch の環境と分離する。
 - Crew・Kiro CLI は計算コンテナ完成後、この WSL に導入して接続を確認済み。OpenCode／Codex CLI は新規セットアップでの導入・単独起動を確認する。認証は独立した対話工程とする。
@@ -220,9 +220,15 @@ Proxy 対応はプレビュー実装とし、通常経路と区別して対応�
 
 ## 6. macOS への展開
 
-Apple Silicon Mac では Windows／WSL の準備を macOS 用セットアップに置き換える。macOS 上に Crew、Kiro CLI、OpenCode、Codex CLI、Python、Git、Docker CLI／Compose／Buildx とコンテナ実行基盤を導入する。macOS は Windows 両 CPU の完成後に対応し、コンテナ実行基盤は Docker Desktop を前提とせず、その段階で選定する。
+Apple Silicon Mac では Windows／WSL の準備を macOS 用セットアップに置き換える。macOS 上に Crew、Kiro CLI、OpenCode、Codex CLI、Python、Git、Docker CLI／Compose／Buildx とコンテナ実行基盤を導入する。対象は macOS 15 以降の Apple Silicon とし、ネイティブ Homebrew を前提に Colima の専用 profile を構築する。Docker Desktop は導入しない。VZ・virtiofs・linux/arm64 を用い、既定値は CPU 2・メモリ8GiB・ディスク上限100GiB。
 
 Docker 層の Dockerfile、Compose 定義、作業フォルダー構成は共通化し、Mac でも linux/arm64 イメージをローカルビルドする。ホスト側の CLI は macOS 用を導入する。Windows 固有処理を Dockerfile や共通の起動処理へ含めない。
+
+macOS の CLI は `~/.local/share/opencae/macos` に分離し、固定 URL・SHA256 の公式バイナリ／Crew wheel を使う。バイナリがなければ自動コンパイルせず停止する。Crew の設定領域も分離する。`0_Setup.command` で構築、`1_StartBackend.command` で認証と選択、`2_StartCrew.command` で起動・既定ブラウザー、`3_StopCrew.command` で停止する。macOS 標準 Bash 3.2 から起動可能にする。
+
+専用 Docker context `colima-opencae-workshop2026` を各コマンドと Crew に渡し、他用途の既定 context は切り替えない。Crew は専用 launchd job とし、Terminal を閉じても継続する。plist はログイン時の自動起動領域に置かず、Stop は対象 job だけを登録解除する。VM と計算コンテナは停止しない。保存設定を照合して同じ工程を再開可能にする。
+
+標準 macOS CI はホストバイナリ導入・ACP・制御を確認し、ネストした VZ を必要とする Colima と CFD の通し確認は Apple Silicon 実機に分ける。Proxy 自動設定は macOS では対象外とする。詳細は [macOS 手順](docs/macos.md) とテスト計画に記録する。
 
 ## 7. 環境構築の完了条件
 
