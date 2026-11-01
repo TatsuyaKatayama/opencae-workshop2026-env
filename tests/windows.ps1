@@ -18,6 +18,9 @@ foreach ($name in @('root','UPPER','bad name','x;echo')) { Must-Fail { Assert-Na
 Check ((ConvertTo-NativeArgument 'a b') -eq '"a b"') 'Space quoting'
 Check ((ConvertTo-NativeArgument 'a"b') -eq '"a\"b"') 'Quote escaping'
 Check ((ConvertTo-NativeArgument '--status') -eq '--status') 'Do not quote WSL options'
+Check ((ConvertTo-NativeArgument 'C:\plain\file.ps1' -ForceQuote) -eq '"C:\plain\file.ps1"') 'Shortcut file paths must be quoted'
+$shortcutArgs = Get-CrewShortcutArguments 'C:\plain\file.ps1' 'C:\plain\environment.json'
+Check ($shortcutArgs -match '-NoExit' -and $shortcutArgs.Contains('-File "C:\plain\file.ps1"') -and $shortcutArgs.Contains('-ConfigPath "C:\plain\environment.json"')) 'Shortcut arguments must match direct invocation'
 Check ((ConvertTo-NativeArgument 'ubuntu_of_kiro') -eq 'ubuntu_of_kiro') 'Do not quote a simple WSL name'
 Check ((ConvertTo-NativeArgument '') -eq '""') 'Empty argument must stay empty'
 Check ((ConvertTo-NativeArgument 'C:\path\') -eq 'C:\path\') 'Do not quote a path without spaces'
@@ -224,6 +227,46 @@ try {
 }
 
 if ($env:OS -eq 'Windows_NT') {
+    # 実際の WScript.Shell で一時フォルダーに .lnk を作り、保存された引数で子 PS を実行。
+    # 実デスクトップ・WSL・ブラウザーは使わない。
+    $shortcutTemp=Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ' 日本語 test')
+    $shortcutLaunchers=Join-Path $shortcutTemp 'launchers'
+    $shortcutDesktop=Join-Path $shortcutTemp 'desktop'
+    [void][IO.Directory]::CreateDirectory($shortcutLaunchers)
+    [void][IO.Directory]::CreateDirectory($shortcutDesktop)
+    try {
+        $shortcutConfig=Join-Path $shortcutTemp 'environment.json'
+        [IO.File]::WriteAllText($shortcutConfig,'{}')
+        $dummy='param([string]$ConfigPath,[switch]$PauseOnError)' + "`n" + '[IO.File]::WriteAllText(($PSCommandPath + ''.ran''),$ConfigPath)' + "`nexit 0`n"
+        foreach ($name in @('StartBackend.ps1','StartCrew.ps1','StopCrew.ps1')) {
+            [IO.File]::WriteAllText((Join-Path $shortcutLaunchers $name),$dummy,(New-Object Text.UTF8Encoding($true)))
+        }
+        New-CrewShortcuts $shortcutLaunchers $shortcutConfig 'shortcut-test' -DesktopDirectory $shortcutDesktop
+        $links=@(Get-ChildItem -LiteralPath $shortcutDesktop -Filter '*.lnk')
+        Check ($links.Count -eq 3) 'Three real shortcuts must be saved'
+        $wscript=New-Object -ComObject WScript.Shell
+        foreach ($link in $links) {
+            $saved=$wscript.CreateShortcut($link.FullName)
+            Check ($saved.WorkingDirectory -eq $shortcutLaunchers -and $saved.WindowStyle -eq 1) 'Shortcut directory and window style must be valid'
+            $info=New-Object System.Diagnostics.ProcessStartInfo
+            $info.FileName=$saved.TargetPath; $info.Arguments=$saved.Arguments
+            $info.WorkingDirectory=$saved.WorkingDirectory; $info.UseShellExecute=$false
+            $info.CreateNoWindow=$true; $info.RedirectStandardOutput=$true; $info.RedirectStandardError=$true
+            $process=New-Object System.Diagnostics.Process
+            $process.StartInfo=$info
+            try {
+                [void]$process.Start()
+                $stdout=$process.StandardOutput.ReadToEndAsync(); $stderr=$process.StandardError.ReadToEndAsync()
+                if (!$process.WaitForExit(15000)) { $process.Kill(); throw 'Shortcut child PowerShell timed out' }
+                Check ($process.ExitCode -eq 0) ('Shortcut child failed: ' + $stderr.Result)
+            } finally { $process.Dispose() }
+        }
+        foreach ($name in @('StartBackend.ps1','StartCrew.ps1','StopCrew.ps1')) {
+            Check ([IO.File]::ReadAllText((Join-Path $shortcutLaunchers ($name+'.ran'))) -eq $shortcutConfig) 'Saved shortcut must pass the literal configuration path'
+        }
+        Remove-Item -LiteralPath (Join-Path $shortcutLaunchers 'StartBackend.ps1')
+        Must-Fail { New-CrewShortcuts $shortcutLaunchers $shortcutConfig 'shortcut-test' -DesktopDirectory $shortcutDesktop }
+    } finally { Remove-Item -LiteralPath $shortcutTemp -Recurse -Force }
     if ($env:TEST_EXPECTED_ARCH) { Check ((Get-WindowsCpu) -eq $env:TEST_EXPECTED_ARCH) 'Wrong native Windows CPU' }
     . (Join-Path $RepositoryRoot 'setup/windows/Setup.ps1')
     $temp = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())

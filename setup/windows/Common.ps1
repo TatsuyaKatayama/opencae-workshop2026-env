@@ -22,9 +22,9 @@ function Assert-Names {
 }
 
 function ConvertTo-NativeArgument {
-    param([AllowEmptyString()][string]$Value)
+    param([AllowEmptyString()][string]$Value, [switch]$ForceQuote)
     # WSL のオプション・空白のない値には不要な引用符を付けない。
-    if ($Value.Length -gt 0 -and $Value -notmatch '[\s"]') { return $Value }
+    if (!$ForceQuote -and $Value.Length -gt 0 -and $Value -notmatch '[\s"]') { return $Value }
     # CommandLineToArgvW quoting, including backslashes before quotes/end.
     '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
 }
@@ -181,17 +181,38 @@ function Invoke-CrewAction {
     }
 }
 
+function Get-CrewShortcutArguments {
+    param([string]$ScriptPath,[string]$ConfigPath)
+    '-NoProfile -NoExit -ExecutionPolicy Bypass -File ' + (ConvertTo-NativeArgument $ScriptPath -ForceQuote) +
+        ' -ConfigPath ' + (ConvertTo-NativeArgument $ConfigPath -ForceQuote) + ' -PauseOnError'
+}
+
 function New-CrewShortcuts {
-    param([string]$LauncherDirectory,[string]$ConfigPath,[string]$DistroName)
-    $desktop = [Environment]::GetFolderPath('DesktopDirectory')
+    param([string]$LauncherDirectory,[string]$ConfigPath,[string]$DistroName,[string]$DesktopDirectory)
+    $LauncherDirectory = (Resolve-Path -LiteralPath $LauncherDirectory).ProviderPath
+    $ConfigPath = (Resolve-Path -LiteralPath $ConfigPath).ProviderPath
+    $entries = @(@('Start Backend','StartBackend.ps1'),@('Start Kiro Crew','StartCrew.ps1'),@('Stop Kiro Crew','StopCrew.ps1'))
+    foreach ($entry in $entries) {
+        if (!(Test-Path -LiteralPath (Join-Path $LauncherDirectory $entry[1]) -PathType Leaf)) { throw "Launcher is missing: $($entry[1])" }
+    }
+    if (!$DesktopDirectory) { $DesktopDirectory = [Environment]::GetFolderPath('DesktopDirectory') }
+    $desktop = (Resolve-Path -LiteralPath $DesktopDirectory).ProviderPath
     $shell = New-Object -ComObject WScript.Shell
     $hostExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    foreach ($entry in @(@('Start Backend','StartBackend.ps1'),@('Start Kiro Crew','StartCrew.ps1'),@('Stop Kiro Crew','StopCrew.ps1'))) {
-        $shortcut = $shell.CreateShortcut((Join-Path $desktop "$($entry[0]) ($DistroName).lnk"))
+    if (!(Test-Path -LiteralPath $hostExe -PathType Leaf)) { throw 'Windows PowerShell executable was not found.' }
+    foreach ($entry in $entries) {
+        $path = Join-Path $desktop "$($entry[0]) ($DistroName).lnk"
+        $shortcut = $shell.CreateShortcut($path)
         $shortcut.TargetPath = $hostExe
-        $shortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -File ' + (ConvertTo-NativeArgument (Join-Path $LauncherDirectory $entry[1])) + ' -ConfigPath ' + (ConvertTo-NativeArgument $ConfigPath) + ' -PauseOnError'
+        $arguments = Get-CrewShortcutArguments (Join-Path $LauncherDirectory $entry[1]) $ConfigPath
+        $shortcut.Arguments = $arguments
         $shortcut.WorkingDirectory = $LauncherDirectory
+        $shortcut.WindowStyle = 1
         $shortcut.Save()
+        $saved = $shell.CreateShortcut($path)
+        if ($saved.TargetPath -ine $hostExe -or $saved.Arguments -cne $arguments -or $saved.WorkingDirectory -ine $LauncherDirectory) {
+            throw "Shortcut verification failed: $path"
+        }
     }
 }
 
@@ -207,7 +228,8 @@ function Remove-OwnedCrewShortcuts {
         if (!(Test-Path -LiteralPath $path)) { continue }
         $shortcut = $shell.CreateShortcut($path)
         $arguments = '-NoProfile -ExecutionPolicy Bypass -File ' + (ConvertTo-NativeArgument (Join-Path $LauncherDirectory $entry[1])) + ' -ConfigPath ' + (ConvertTo-NativeArgument $ConfigPath) + ' -PauseOnError'
-        if ($shortcut.TargetPath -ieq $hostExe -and $shortcut.Arguments -ceq $arguments) { Remove-Item -LiteralPath $path }
+        $currentArguments = Get-CrewShortcutArguments (Join-Path $LauncherDirectory $entry[1]) $ConfigPath
+        if ($shortcut.TargetPath -ieq $hostExe -and ($shortcut.Arguments -ceq $arguments -or $shortcut.Arguments -ceq $currentArguments)) { Remove-Item -LiteralPath $path }
     }
 }
 

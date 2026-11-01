@@ -6,8 +6,8 @@ param(
     [switch]$SkipAuthentication,
     [switch]$PauseOnError
 )
-. "$PSScriptRoot/Common.ps1"
 try {
+    . "$PSScriptRoot/Common.ps1"
     if (!$Backend) {
         Write-Host 'Select backend: 1 = Kiro CLI, 2 = Codex, 3 = OpenCode'
         switch (Read-Host 'Backend [1-3]') {

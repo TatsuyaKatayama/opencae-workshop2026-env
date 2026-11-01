@@ -1,8 +1,8 @@
 ﻿#requires -version 5.1
 [CmdletBinding()]
 param([Parameter(Mandatory=$true)][string]$ConfigPath, [switch]$PauseOnError)
-. "$PSScriptRoot/Common.ps1"
 try {
+    . "$PSScriptRoot/Common.ps1"
     Invoke-CrewAction -Action 'Stop' -ConfigPath $ConfigPath
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
