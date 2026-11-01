@@ -126,7 +126,7 @@ if ($env:OS -eq 'Windows_NT') {
     $temp = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
     $previousLocalAppData=$env:LOCALAPPDATA
     $env:LOCALAPPDATA=$temp
-    $script:setupRegistration=$null; $script:setupCalls=@(); $script:setupFailure=$true; $script:shortcuts=0
+    $script:setupRegistration=$null; $script:setupCalls=@(); $script:setupFailure=$true; $script:setupRefreshFailure=$false; $script:shortcuts=0
     function Get-SetupArchitecture { return 'amd64' }
     function Get-WslRegistration { param($DistroName) return $script:setupRegistration }
     function New-CrewShortcuts { param($LauncherDirectory,$ConfigPath,$DistroName) $script:shortcuts++ }
@@ -139,7 +139,8 @@ if ($env:OS -eq 'Windows_NT') {
         if ($Arguments -contains '--import') {
             Check (Test-Path -LiteralPath $Arguments[2] -PathType Container) 'Import directory must exist before wsl --import'
             $script:setupRegistration=[pscustomobject]@{Id='created-id';BasePath=$Arguments[2];Version=2}
-        } elseif ($Arguments -contains 'wslpath') { $output='/mnt/source with spaces' }
+        } elseif ($script:setupRefreshFailure -and $Arguments -contains 'cmp') { $code=72 }
+        elseif ($Arguments -contains 'wslpath') { $output='/mnt/source with spaces' }
         elseif ($Arguments -contains 'cat') {
             $c=Get-Content (Join-Path $env:LOCALAPPDATA 'OpenCAE/environments/test-new/environment.json') -Raw | ConvertFrom-Json
             $output=$c.environmentId
@@ -159,6 +160,10 @@ if ($env:OS -eq 'Windows_NT') {
         Check (@($script:setupCalls | Where-Object { $_ -contains '--import' }).Count -eq 1) 'Resume must not reimport'
         Check (@($script:setupCalls | Where-Object { ($_ -join ' ') -match 'stage-project.sh' }).Count -eq 1) 'Resume must not restage'
         Check ($script:shortcuts -eq 1) 'Shortcuts not created'
+        $refreshes=@($script:setupCalls | Where-Object { $_ -contains 'install' -and $_[-1] -match '/scripts/smoke-test.sh$' })
+        Check ($refreshes.Count -eq 2) 'Initial setup and resume must both refresh the validation script'
+        Check ($refreshes[0][-2] -eq '/mnt/source with spaces/scripts/smoke-test.sh') 'Refresh must use the current Windows checkout'
+        Check (@($script:setupCalls | Where-Object { $_ -contains 'cmp' }).Count -eq 2) 'Copied validation script must be verified'
         Check (Test-Path (Join-Path $temp 'OpenCAE/environments/test-new/launchers/KiroLogin.ps1')) 'Launchers were not copied'
         $bad=@{}; foreach ($k in $options.Keys) { $bad[$k]=$options[$k] }; $bad.Port=5481
         Must-Fail { Invoke-WorkshopSetup @bad }
@@ -173,6 +178,11 @@ if ($env:OS -eq 'Windows_NT') {
         $script:pathPrompt=''
         Invoke-WorkshopSetup @options
         Check ($script:pathPrompt -eq '') 'Explicit InstallLocation must not prompt'
+        $script:setupRefreshFailure=$true
+        $before=$script:setupCalls.Count
+        Must-Fail { Invoke-WorkshopSetup @options }
+        $newCalls=@($script:setupCalls | Select-Object -Skip $before)
+        Check (@($newCalls | Where-Object { ($_ -join ' ') -match '/setup.sh' }).Count -eq 0) 'Copy verification failure must block the core setup'
     } finally {
         $env:LOCALAPPDATA=$previousLocalAppData
         Remove-Item -LiteralPath $temp -Recurse -Force

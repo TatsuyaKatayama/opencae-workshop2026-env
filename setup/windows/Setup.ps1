@@ -116,6 +116,11 @@ param(
         Assert-WslResult (Invoke-Wsl -Arguments @('-d',$DistroName,'-u',$UserName,'--exec','bash',"$linuxSource/setup/ubuntu2404/stage-project.sh",$linuxSource,$config.projectPath,$config.environmentId)) 'Project staging'
         $config.phase='Staged'; Save-Environment $configPath $config
     }
+    # Resume uses a staged copy, so git pull on Windows alone does not update it.
+    $smokeSource = "$linuxSource/scripts/smoke-test.sh"
+    $smokeTarget = "$($config.projectPath)/scripts/smoke-test.sh"
+    Assert-WslResult (Invoke-Wsl -Arguments @('-d',$DistroName,'-u',$UserName,'--exec','install','-m','0755',$smokeSource,$smokeTarget)) 'Refresh CFD validation script'
+    Assert-WslResult (Invoke-Wsl -Arguments @('-d',$DistroName,'-u',$UserName,'--exec','cmp','--silent','--',$smokeSource,$smokeTarget)) 'Verify CFD validation script'
     $coreArgs = Get-UserArguments $config 'setup.sh'
     if ($EnableProxyPreview) {
         $winProxy = (Resolve-Path -LiteralPath $ProxyConfig).Path
@@ -134,7 +139,7 @@ param(
     }
     New-CrewShortcuts $launchers $configPath $DistroName
     $config.phase='Ready'; Save-Environment $configPath $config
-    Write-Host 'Setup complete. On the workshop day: Kiro CLI Login, then Start Kiro Crew.'
+    Write-Host 'セットアップ完了。デスクトップの「Kiro CLI Login」→「Start Kiro Crew」の順に起動してください。終了時は「Stop Kiro Crew」を使用してください。'
 }
 
 if ($MyInvocation.InvocationName -ne '.') {

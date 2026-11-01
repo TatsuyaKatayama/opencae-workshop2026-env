@@ -157,4 +157,4 @@ step=cfd-build
 run_step cfd-build as_user bash "$SETUP_ROOT/scripts/build-image.sh"
 run_step cfd-check as_user bash "$SETUP_ROOT/scripts/smoke-test.sh"
 rm -f "$STATE/failed-step"
-note 'セットアップ完了。認証は kiro-login.sh、起動は crew-start.sh を実行してください。'
+note 'Ubuntu 側のソフトウェア導入と計算環境の検証が完了しました。'
