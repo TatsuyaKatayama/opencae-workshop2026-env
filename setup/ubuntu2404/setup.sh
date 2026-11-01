@@ -136,7 +136,10 @@ install_agents() {
         command -v kirocrew >/dev/null && die 'Crew の別バージョンが存在します。'
         download "$KIRO_CREW_INSTALLER_URL" "$KIRO_CREW_INSTALLER_SHA256" "$STATE/downloads/crew-install.sh"
         # 署名付きバージョンマニフェストの検証は公式インストーラーが担当する。
-        KIROCREW_ALLOW_SOURCE_BUILDS=0 sh "$STATE/downloads/crew-install.sh" --version "$KIRO_CREW_VERSION" --system-python --no-kas
+        # CI 等の共有 PIPX_HOME を継承せず、常に指定ユーザーの領域を使う。
+        PIPX_HOME="$HOME/.local/share/opencae/pipx" PIPX_BIN_DIR="$HOME/.local/bin" \
+            PIPX_MAN_DIR="$HOME/.local/share/opencae/man" KIROCREW_ALLOW_SOURCE_BUILDS=0 \
+            sh "$STATE/downloads/crew-install.sh" --version "$KIRO_CREW_VERSION" --system-python --no-kas
         has_version kirocrew "$KIRO_CREW_VERSION" || die 'Crew の版を確認できません。'
     fi
     bash "$SETUP_ROOT/setup/ubuntu2404/install-codex-acp.sh"
