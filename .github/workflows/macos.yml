@@ -1,0 +1,55 @@
+name: macOS host tools and controls
+on:
+  push:
+    paths: [setup/macos/**, setup/config/**, setup/ubuntu2404/login_browser.py, scripts/**, tests/**, .github/workflows/macos.yml]
+  pull_request:
+    paths: [setup/macos/**, setup/config/**, setup/ubuntu2404/login_browser.py, scripts/**, tests/**, .github/workflows/macos.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  host:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check stock Bash and control contracts without a VM
+        shell: bash
+        run: |
+          test "$(uname -m)" = arm64
+          for script in setup/macos/*.sh setup/macos/*.command scripts/*.sh scripts/lib/*.sh; do /bin/bash -n "$script"; done
+          /bin/bash setup/macos/setup.sh --plan
+          python3 -m unittest discover -s tests -p 'test_macos.py' -v
+          python3 -m unittest discover -s tests -p 'test_homebrew.py' -v
+          python3 -m unittest discover -s tests -p 'test_commands.py' -v
+          python3 -m unittest discover -s tests -p 'test_login_browser.py' -v
+      - name: Install pinned macOS host binaries without Docker or CFD
+        run: /bin/bash setup/macos/setup.sh --agents-only
+      - name: Verify native launchd with a dummy HTTP service
+        run: /opt/homebrew/opt/python@3.12/bin/python3.12 -m unittest discover -s tests -p test_macos_launchd.py -v
+      - name: Verify unauthenticated backends and ACP
+        shell: bash
+        run: |
+          source setup/macos/lib.sh
+          test "$(kirocrew config get agent.acp_backend)" = kiro
+          kiro-cli --version
+          kirocrew --version
+          codex --version
+          opencode --version
+          for backend in kiro codex; do
+            status=0
+            /bin/bash setup/macos/start-backend.sh --backend "$backend" --status || status=$?
+            test "$status" = 3
+          done
+          /bin/bash setup/macos/start-backend.sh --backend opencode --skip-auth
+          python3 tests/probe_backends.py
+          test ! -d "$KIROCREW_HOME/engines/kas"
+      - name: Verify repeat installation preserves backend
+        shell: bash
+        run: |
+          /bin/bash setup/macos/setup.sh --agents-only
+          source setup/macos/lib.sh
+          test "$(kirocrew config get agent.acp_backend)" = opencode

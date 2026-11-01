@@ -20,14 +20,21 @@ import json, os, sys
 from pathlib import Path
 args = sys.argv[1:]
 if args[0] == "context":
-    print("unix:///var/run/docker.sock")
+    print(os.environ.get("FAKE_ENDPOINT", "unix:///var/run/docker.sock"))
 elif args[0] == "info":
     print(os.environ["FAKE_INFO"])
 elif args[0] == "compose" and "run" in args:
     Path(os.environ["FAKE_ARGS"]).write_text(json.dumps(args))
+    Path(os.environ["FAKE_ARGS"] + ".context").write_text(os.environ.get("DOCKER_CONTEXT", ""))
     sys.exit(int(os.environ.get("FAKE_EXIT", "0")))
 ''')
         docker.chmod(0o755)
+        uname = self.path / "uname"
+        uname.write_text('''#!/usr/bin/env python3
+import os, sys
+print(os.environ.get("FAKE_ARCH", os.uname().machine) if "-m" in sys.argv else os.environ.get("FAKE_OS", "Linux"))
+''')
+        uname.chmod(0o755)
         arch = os.uname().machine
         self.env = dict(os.environ, PATH=f"{self.path}:{os.environ['PATH']}",
                         FAKE_INFO=f"Ubuntu 24.04 LTS|linux|{arch}",
@@ -63,6 +70,33 @@ elif args[0] == "compose" and "run" in args:
         result = self.run_tool("true")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("標準構成", result.stderr)
+
+    def mac(self):
+        self.env.update(FAKE_OS="Darwin", FAKE_ARCH="arm64", FAKE_INFO="Colima|linux|aarch64",
+                        FAKE_ENDPOINT="unix://" + self.env["HOME"] + "/.colima/opencae-workshop2026/docker.sock")
+        for name in ("DOCKER_CONFIG", "COLIMA_HOME", "LIMA_HOME"):
+            self.env.pop(name, None)
+
+    def test_mac_uses_dedicated_colima_and_native_architecture(self):
+        self.mac()
+        result = self.run_tool("true")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.path / "args.json").exists())
+        self.assertEqual((self.path / "args.json.context").read_text(), "colima-opencae-workshop2026")
+
+    def test_mac_refuses_wrong_socket_context_cpu_and_desktop(self):
+        for key,value in [("FAKE_ENDPOINT", "unix:///var/run/docker.sock"),
+                          ("DOCKER_CONTEXT", "desktop-linux"), ("DOCKER_HOST", "tcp://other:2375"),
+                          ("FAKE_INFO", "Docker Desktop|linux|aarch64"),
+                          ("FAKE_INFO", "Colima|linux|x86_64"), ("COLIMA_HOME", "/other")]:
+            with self.subTest(key=key, value=value):
+                self.mac()
+                env = self.env.copy()
+                self.env[key] = value
+                result = self.run_tool("true")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((self.path / "args.json").exists())
+                self.env = env
 
     def test_requires_command(self):
         result = self.run_tool()

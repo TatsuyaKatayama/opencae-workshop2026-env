@@ -1,0 +1,35 @@
+name: ARM64 ParaView binary validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/macos-support]
+    paths: [.github/workflows/paraview-arm64.yml]
+permissions:
+  contents: read
+jobs:
+  binary:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve and validate prebuilt OSMesa packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/paraview-binary
+          curl -fLsS --retry 3 https://github.com/mamba-org/micromamba-releases/releases/download/2.10.0-0/micromamba-linux-aarch64 -o "$RUNNER_TEMP/micromamba"
+          echo "3bb56786e21b9b24024f599fe9185b4a59dc3f9f59937a42311ee583adbbb23c  $RUNNER_TEMP/micromamba" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/micromamba"
+          export MAMBA_ROOT_PREFIX="$RUNNER_TEMP/mamba"
+          "$RUNNER_TEMP/micromamba" create -y -p "$RUNNER_TEMP/paraview" --override-channels -c conda-forge --strict-channel-priority \
+            'paraview=5.13.3=py312hcc5151f_8_osmesa' 'python=3.12' \
+            > work/paraview-binary/install.log 2>&1
+          "$RUNNER_TEMP/micromamba" list -p "$RUNNER_TEMP/paraview" --explicit --sha256 > work/paraview-binary/paraview-arm64.lock
+          env -u DISPLAY LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
+            "$RUNNER_TEMP/paraview/bin/pvpython" --force-offscreen-rendering tests/probe_paraview.py work/paraview-binary
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: paraview-arm64-binary
+          path: work/paraview-binary/
+          retention-days: 7
